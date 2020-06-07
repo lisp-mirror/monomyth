@@ -1,0 +1,22 @@
+image: daewok/lisp-devel
+
+stages:
+  - test
+
+test:
+  stage: test
+  services:
+    - rabbitmq:latest
+  variables:
+    TEST_RMQ: "rabbitmq"
+  before_script:
+    - apt update -qy
+    - apt install -y libcurl4-openssl-dev
+    - curl -L https://raw.githubusercontent.com/roswell/roswell/release/scripts/install-for-ci.sh | sh
+    - ln -s /builds/smaller_infinity/monomyth /home/lisp/.roswell/local-projects/monomyth
+  script:
+    - ./bin/test.ros
+  only:
+    - merge_request
+    - develop
+    - master
