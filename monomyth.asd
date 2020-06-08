@@ -4,6 +4,7 @@
   :license ""
   :depends-on (:lfarm-server
                :lfarm-client
+               :uuid
                :cl-cpus
                :iterate
                :vom
