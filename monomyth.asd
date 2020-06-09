@@ -2,6 +2,7 @@
   :version "0.1.0"
   :author ""
   :license ""
+  :class :package-inferred-system
   :depends-on (:lfarm-server
                :lfarm-client
                :uuid
@@ -12,12 +13,6 @@
                :cl-rabbit
                :babel
                :folio2)
-  :components ((:module "src"
-                :components
-                ((:file "main")
-                 (:file "node")
-                 (:file "rmq-node"
-                  :depends-on ("node")))))
   :description ""
   :in-order-to ((test-op (test-op "monomyth/tests"))))
 

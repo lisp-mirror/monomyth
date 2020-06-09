@@ -17,10 +17,12 @@
 (defclass rmq-node (node)
   ((conn :initform (error "connection must be supplied")
          :initarg :conn
-         :reader conn)
+         :reader conn
+         :documentation "the rmq connection, there should only be one per machine")
    (channel :initarg :chan
             :initform (error "channel number must be set")
-            :reader chan)
+            :reader chan
+            :documentation "the connection channel number, should be distinct from all other nodes")
    (exchange :initarg :exchange
              :initform ""
              :reader exchange)
