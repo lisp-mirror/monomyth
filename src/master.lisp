@@ -11,6 +11,9 @@ it should be okay start a node"))
 (defgeneric name-worker (worker)
   (:documentation "creates the name that lfarm uses internally for the worker's kernel"))
 
+(defgeneric build-node (worker recipe)
+  (:documentation "constructs a node from a recipe"))
+
 (defgeneric start-node (worker node)
   (:documentation "runs the node every interval
 the interval is based on the start time, if the node takes too long

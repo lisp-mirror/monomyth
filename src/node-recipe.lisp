@@ -11,9 +11,6 @@
 (defgeneric name-node (recipe)
   (:documentation "takes a recipe and produces a unique node name"))
 
-(defgeneric build-node (recipe)
-  (:documentation "constructs a node from a recipe"))
-
 (defclass node-recipe ()
   ((type :reader node-recipe/type
          :initarg :type
