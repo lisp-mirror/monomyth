@@ -35,24 +35,26 @@ uses universal time"))
 defaults to 10"))
   (:documentation "defines a single machine with its own threads, nodes, and connections"))
 
+(defun build-worker (address threads &optional interval)
+  ())
+
 (defstruct (master (:constructor build-master ()))
   "the master system only has two fields, a map of worker ips to workers
 and a map of node type symbols to node recipes"
   (workers (make-hash-table :test #'string=) :read-only t)
   (recipes (make-hash-table) :read-only t))
 
-(deftask run-node (worker node)
-  (iter:iterate
-    (let ((goal (+ (worker/interval worker) (get-universal-time))))
-      (run-iteration node)
-      (let ((end (get-universal-time)))
-        (when (> goal end))
-        (sleep (- goal end))))))
+(deftask run-node (node) (run-iteration node))
 
 (defmethod start-worker ((worker worker))
   )
 
 (defmethod start-node ((worker worker) (node node))
-  (let ((chan (make-channel)))
-    (submit-task chan #'run-node worker node)
-    (receive-result chan)))
+  (iter:iterate
+    (let ((*kernel* (worker/kernal worker))
+          (chan (make-channel))
+          (goal (+ (worker/interval worker) (get-universal-time))))
+      (submit-task chan #'run-node worker node)
+      (receive-result chan)
+      (let ((end (get-universal-time)))
+        (when (> goal end) (sleep (- goal end)))))))
