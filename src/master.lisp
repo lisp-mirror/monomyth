@@ -1,5 +1,5 @@
 (defpackage monomyth/master
-  (:use :cl :monomyth/node :lfarm))
+  (:use :cl))
 (in-package :monomyth/master)
 
 (defstruct (master (:constructor build-master ()))

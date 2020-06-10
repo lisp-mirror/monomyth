@@ -1,5 +1,13 @@
 (defpackage monomyth/worker
-  (:use :cl :monomyth/node :lfarm))
+  (:use :cl :monomyth/node :lfarm)
+  (:export worker
+           worker/kernal
+           worker/nodes
+           start-worker
+           name-worker
+           build-node
+           remove-node
+           start-node))
 (in-package :monomyth/worker)
 
 (defparameter *starting-port* 60000)
@@ -13,6 +21,9 @@ it should be okay start a node"))
 
 (defgeneric build-node (worker recipe)
   (:documentation "constructs a node from a recipe"))
+
+(defgeneric remove-node (worker node-name)
+  (:documentation "removes a node from the worker"))
 
 (defgeneric start-node (worker node)
   (:documentation "runs the node every interval

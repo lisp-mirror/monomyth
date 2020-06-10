@@ -4,8 +4,7 @@
            node-recipe/type
            node-recipe/transform-fn
            node-recipe/batch-size
-           name-node
-           build-node))
+           name-node))
 (in-package :monomyth/node-recipe)
 
 (defgeneric name-node (recipe)
