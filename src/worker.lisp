@@ -1,9 +1,10 @@
 (defpackage monomyth/worker
-  (:use :cl :monomyth/node :lfarm)
+  (:use :cl :monomyth/node :lfarm :lfarm-admin)
   (:export worker
            worker/kernal
            worker/nodes
            start-worker
+           stop-worker
            name-worker
            build-node
            remove-node
@@ -15,6 +16,9 @@
 (defgeneric start-worker (worker)
   (:documentation "starts the worker processes, by the time this method is done
 it should be okay start a node"))
+
+(defgeneric stop-worker (worker)
+  (:documentation "stops the worker processes"))
 
 (defgeneric name-worker (worker)
   (:documentation "creates the name that lfarm uses internally for the worker's kernel"))
@@ -37,20 +41,18 @@ uses universal time"))
             :initform (error "worker address must be set")
             :documentation "ip address of the worker machine")
    (kernal :accessor worker/kernal
-           :initform (error "worker kernel must be set")
            :documentation "the lfarm kernal for that machine")
    (threads :reader worker/threads
             :initarg :threads
             :initform (error "worker thread count must be set")
             :documentation "the number of threads (clients) to start")
    (nodes :reader worker/nodes
-          :initform (make-hash-table :test #'string=)
+          :initform (make-hash-table :test #'equal)
           :documentation "a hash table of node names to nodes")
    (interval :reader worker/interval
              :initarg :interval
              :initform 10
-             :documentation "the minimum time between node cycles
-defaults to 10"))
+             :documentation "the minimum time between node cycles, defaults to 10"))
   (:documentation "defines a single machine with its own threads, nodes, and connections"))
 
 (deftask run-node (node) (run-iteration node))
@@ -67,6 +69,16 @@ defaults to 10"))
     (vom:info "starting kernel for worker at ~a" address)
     (setf (worker/kernal worker) (make-kernel threads :name (name-worker worker)))))
 
+(defmethod stop-worker ((worker worker))
+  (iter:iterate
+    (iter:for port from *starting-port* to
+              (+ *starting-port* (worker/threads worker) -1))
+    (vom:info "stopping worker server on ~a:~a" (worker/address worker) port)
+    (end-server (worker/address worker) port))
+  (vom:info "stopping kernal for worker at ~a" (worker/address worker))
+  (let ((*kernel* (worker/kernal worker)))
+    (end-kernel :wait t)))
+
 (defmethod name-worker ((worker worker))
   (format nil "lfarm-client-~a" (worker/address worker)))
 
@@ -79,3 +91,7 @@ defaults to 10"))
       (receive-result chan)
       (let ((end (get-universal-time)))
         (when (> goal end) (sleep (- goal end)))))))
+
+(defmethod remove-node ((worker worker) node-name)
+  (shutdown (gethash node-name (worker/nodes worker)))
+  (remhash node-name (worker/nodes worker)))

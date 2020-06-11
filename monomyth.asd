@@ -2,7 +2,20 @@
   :version "0.1.0"
   :author ""
   :license ""
-  :class :package-inferred-system
+  :components ((:module "src"
+                :components
+                ((:file "main")
+                 (:file "node")
+                 (:file "rmq-node"
+                  :depends-on ("node"))
+                 (:file "node-recipe")
+                 (:file "rmq-node-recipe"
+                  :depends-on ("node-recipe"))
+                 (:file "worker"
+                  :depends-on ("node"))
+                 (:file "rmq-worker"
+                  :depends-on ("worker" "node" "rmq-node" "node-recipe" "rmq-node-recipe"))
+                 (:file "master"))))
   :depends-on (:lfarm-server
                :lfarm-client
                :uuid
@@ -25,6 +38,7 @@
   :defsystem-depends-on (:prove-asdf)
   :components ((:module "tests"
                 :components
-                ((:test-file "rmq-node"))))
+                ((:test-file "rmq-node")
+                 (:test-file "rmq-worker"))))
   :description "Test system for monomyth"
   :perform (test-op (op c) (funcall (intern #.(string :run) :prove) c)))

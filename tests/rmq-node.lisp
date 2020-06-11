@@ -1,5 +1,5 @@
 (defpackage monomyth/tests/rmq-node
-  (:use :cl :prove :monomyth/node :monomyth/rmq-node :cl-mock))
+  (:use :cl :prove :monomyth/node :monomyth/rmq-node :cl-mock :cl-rabbit))
 (in-package :monomyth/tests/rmq-node)
 
 (plan nil)
@@ -412,5 +412,6 @@
 (delete-queue *node* *fail-queue*)
 (shutdown *node*)
 (shutdown *checking-node*)
+(destroy-connection *conn*)
 
 (finalize)
