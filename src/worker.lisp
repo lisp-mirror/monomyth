@@ -70,13 +70,13 @@ uses universal time"))
     (setf (worker/kernal worker) (make-kernel threads :name (name-worker worker)))))
 
 (defmethod stop-worker ((worker worker))
-  (iter:iterate
-    (iter:for port from *starting-port* to
-              (+ *starting-port* (worker/threads worker) -1))
-    (vom:info "stopping worker server on ~a:~a" (worker/address worker) port)
-    (end-server (worker/address worker) port))
-  (vom:info "stopping kernal for worker at ~a" (worker/address worker))
   (let ((*kernel* (worker/kernal worker)))
+    (iter:iterate
+      (iter:for port from *starting-port* to
+                (+ *starting-port* (worker/threads worker) -1))
+      (vom:info "stopping worker server on ~a:~a" (worker/address worker) port)
+      (end-server (worker/address worker) port))
+    (vom:info "stopping kernal for worker at ~a" (worker/address worker))
     (end-kernel :wait t)))
 
 (defmethod name-worker ((worker worker))
