@@ -67,7 +67,8 @@
       (is (getf got-msg :items) nil))))
 
 (shutdown *node*)
-(setf *node* (make-rmq-node nil (format nil "test-rmq-node-~d" (get-universal-time))
+(setf *node* (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
+                            (format nil "test-rmq-node-~d" (get-universal-time))
                             *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 10))
 (startup *node*)
 
@@ -107,6 +108,63 @@
     (let ((result (pull-items *node*)))
       (ok (not (getf result :success)))
       (is (getf result :error) "test"))))
+
+(subtest "transform-items success"
+  (let ((items `("1" "2" "3" "4" "5" "6" "7" "8" "9" "10")))
+
+    (iter:iterate
+      (iter:for item in items)
+      (send-message *node* *source-queue* item))
+
+    (sleep 1)
+
+    (let ((got-items (pull-items *node*)))
+      (ok (getf got-items :success))
+
+      (let ((new-items (transform-items *node* got-items)))
+        (ok (getf new-items :success))
+        (is (length (getf new-items :items)) 10)
+
+        (iter:iterate
+          (iter:for expect in items)
+          (iter:for got in (getf new-items :items))
+          (is (rmq-message-body got) (format nil "test ~a" expect))
+          (ack-message *node* got))))))
+
+(shutdown *node*)
+(setf *node* (make-rmq-node #'(lambda (x) (declare (ignore x)) (error "test"))
+                            (format nil "test-rmq-node-~d" (get-universal-time))
+                            *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 10))
+(startup *node*)
+
+(subtest "transform-items failure"
+  (let ((items `("1" "2" "3" "4" "5" "6" "7" "8" "9" "10")))
+
+    (iter:iterate
+      (iter:for item in items)
+      (send-message *node* *source-queue* item))
+
+    (sleep 1)
+
+    (let ((got-items (pull-items *node*)))
+      (ok (getf got-items :success))
+
+      (let ((new-items (transform-items *node* got-items)))
+        (ok (not (getf new-items :success)))
+        (is (length (getf new-items :items)) 10)
+        (is-error (getf new-items :error) 'simple-error)
+
+        (iter:iterate
+          (iter:for expect in items)
+          (iter:for got in (getf new-items :items))
+          (is (rmq-message-body got) expect)
+          (ack-message *node* got))))))
+
+(shutdown *node*)
+(setf *node* (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
+                            (format nil "test-rmq-node-~d" (get-universal-time))
+                            *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 10))
+(startup *node*)
 
 (defvar *checking-node* (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
                                        *conn* 2 *dest-queue* *source-queue* *fail-queue* :batch-size 10))
@@ -309,9 +367,7 @@
 
 (shutdown *node*)
 (shutdown *checking-node*)
-(setf *node* (make-rmq-node #'(lambda (x) (build-rmq-message
-                                           :body (format nil "test ~a" (rmq-message-body x))
-                                           :delivery-tag (rmq-message-delivery-tag x)))
+(setf *node* (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
                             (format nil "test-rmq-node-~d" (get-universal-time))
                             *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 1))
 (setf *checking-node* (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))

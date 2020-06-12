@@ -1,5 +1,5 @@
 (defpackage monomyth/tests/rmq-worker
-  (:use :cl :prove :monomyth/worker :monomyth/rmq-worker))
+  (:use :cl :prove :monomyth/worker :monomyth/rmq-worker :monomyth/rmq-node-recipe))
 (in-package :monomyth/tests/rmq-worker)
 
 (plan nil)

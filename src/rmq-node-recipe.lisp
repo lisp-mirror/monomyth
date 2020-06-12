@@ -3,6 +3,7 @@
   (:export rmq-node-recipe
            rmq-node-recipe/source-queue
            rmq-node-recipe/dest-queue
+           build-rmq-node-recipe
            name-fail-queue))
 (in-package :monomyth/rmq-node-recipe)
 
@@ -17,6 +18,11 @@
                :initform (error "destination queue must be set")
                :reader rmq-node-recipe/dest-queue))
   (:documentation "recipe with the added fields needed to build an rmq-node"))
+
+(defun build-rmq-node-recipe (node-type transform-fn source-queue dest-queue
+                              &optional batch-size)
+  (make-instance 'rmq-node-recipe :type node-type :transform-fn transform-fn :batch-size batch-size
+                 :source-queue source-queue :dest-queue dest-queue))
 
 (defmethod name-fail-queue ((recipe rmq-node-recipe))
   (format nil "~a-fail" (node-recipe/type recipe)))

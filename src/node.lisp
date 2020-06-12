@@ -66,7 +66,7 @@ should return a plist with one of the slots as :success and the new items under 
         (iter:collect (funcall (node/trans-fn node) item)))
     (error (c)
       (vom:error "unexpected error in transformation ~a" c)
-      `(:success nil :error c))
+      `(:error ,c :items ,(getf pulled :items)))
     (:no-error (res) `(:success t :items ,res))))
 
 (defmethod run-iteration ((node node))

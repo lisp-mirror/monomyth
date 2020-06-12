@@ -142,6 +142,18 @@ return :success t with the :result if things go well"
                       ((getf result :success) (iter:collect (getf result :result)))
                       (t (return-from pull-items result)))))))
 
+(defmethod transform-items ((node rmq-node) pulled)
+  (handler-case
+      (iter:iterate
+        (iter:for item in (getf pulled :items))
+        (iter:collect (build-rmq-message
+                       :body (funcall (node/trans-fn node) (rmq-message-body item))
+                       :delivery-tag (rmq-message-delivery-tag item))))
+    (error (c)
+      (vom:error "unexpected error in transformation ~a" c)
+      `(:error ,c :items ,(getf pulled :items)))
+    (:no-error (res) `(:success t :items ,res))))
+
 (defmethod place-items ((node rmq-node) result)
   (iter:iterate
     (iter:for item in (getf result :items))
