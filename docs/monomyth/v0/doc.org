@@ -1,0 +1,45 @@
+#+TITLE: Monomyth
+#+AUTHOR: Paul Ricks
+
+* Introduction
+  Monomyth is a distributed data processing system built using Common Lisp.
+  It is designed to split the messaging systems into two, one defined and
+  controlled by Monomyth, and one defined and controlled by the user.
+  The work itself is done on a group of concurrent workers that use user defined
+  nodes to process the data and are controlled by a single master server.
+
+* System Architecture
+  [[./system.png]]
+
+  Monomyth is split into four distinct pieces.
+  The first is the data stream; an outside system that persists data so that,
+  should Monomyth fail, the data remains safe.
+  This allows for a fail fast structure.
+
+  The second is the Nodes.
+  These nodes handle a single distinct action on a single thread.
+  They first pick up a batch of data from the data stream, act on it, and place it
+  back on a new stream (or queue) on the outside system.
+
+  The nodes are started and stopped by a worker server.
+  The server takes no other action other than this, nodes cannot by altered.
+  It is assumed that there is a one to one ratio between servers and workers
+  (this assumption simplifies connection management when it comes to the data stream).
+
+  Workers are controlled by a single master server.
+  The master and workers communicate via the Monomyth Orchestration Protocol (MMOP).
+
+* MMOP
+  MMOP is a protocol designed to run on top of ZeroMQ used by master and worker servers.
+  Each MMOP message is a multipart ZeroMQ Message requiring the collection of multiple frames.
+
+** Versioning
+   The first MMOP frame is the MMOP version, which is a string constructed as
+   ~"MMOP/{version}"~ where the only current version is 0.
+   Version 0 makes no promises as to backwards comparability.
+
+*** Defined Messages
+
+**** Worker Ready
+
+***** Sent Message
