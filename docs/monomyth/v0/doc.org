@@ -47,8 +47,7 @@
    Version 0 makes no promises as to backwards compatibility.
 
 ** Common Frames
-   All Messages have a few base frames that are sent the predicate all messages
-   (sent and received are the same).
+   All Messages have a few base frames that are sent the before all messages.
    The first frame for all worker messages is the MMOP version.
    The first frame for all master messages is the client identity and the second
    is the MMOP version.
@@ -58,7 +57,7 @@
 **** Worker Ready [worker-ready]
 
      The worker-ready message is sent from a worker server to the master server
-     to indicate that it is up and ready to start threads.
+     to indicate that it is up and ready to start nodes.
      No confirmation message is sent.
 
      Frames:
