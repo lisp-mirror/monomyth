@@ -33,6 +33,13 @@
   MMOP is a protocol designed to run on top of ZeroMQ used by master and worker servers.
   Each MMOP message is a multipart ZeroMQ Message requiring the collection of multiple frames.
 
+** Sockets
+   Currently, the set up is that each worker has a dealer socket and the master
+   uses a single threaded master socket.
+   This allows for full async communication in the future.
+   Note, to make this work, the master server must receive a full message from the
+   workers before then communicating with them.
+
 ** Versioning
    The first MMOP frame (that is the first non-routing frame) is the MMOP version,
    which is a string constructed as ~"MMOP/{version}"~ where the only current

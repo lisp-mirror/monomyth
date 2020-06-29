@@ -1,5 +1,5 @@
 (defpackage monomyth/tests/mmop
-  (:use :cl :prove :monomyth/mmop))
+  (:use :cl :prove :monomyth/mmop :rutils.bind))
 (in-package :monomyth/tests/mmop)
 
 (plan nil)
@@ -19,7 +19,7 @@
         (is (pull-msg server)
             (cons client-name test-frames))))))
 
-(subtest "msg-happy-path-to-router-second-message"
+(subtest "msg-happy-path-to-router-with-second-message"
   (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
         (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
         (test-frames '("1" "2" "3")))
@@ -46,11 +46,26 @@
         (pzmq:connect client "ipc://test.ipc")
         (pzmq:bind server "ipc://test.ipc")
 
-        (format t "a1~%")
-        (send-msg "mmop/test" server (append `(,client-name nil) test-frames))
-        (format t "a2~%")
-        (is (pull-msg client) test-frames)
-        (format t "a3~%")
-        ))))
+        (send-msg "mmop/test" client '("READY"))
+        (with (((id _) (pull-msg server)))
+          (send-msg "mmop/test" server (cons id test-frames))
+          (is (pull-msg client) test-frames))))))
+
+(subtest "msg-happy-path-to-dealer-with-second-msg"
+  (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+        (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
+        (test-frames '("1" "2" "3")))
+    (pzmq:with-context nil
+      (pzmq:with-sockets ((server :router) (client :dealer))
+        (pzmq:setsockopt server :identity server-name)
+        (pzmq:setsockopt client :identity client-name)
+        (pzmq:connect client "ipc://test.ipc")
+        (pzmq:bind server "ipc://test.ipc")
+
+        (send-msg "mmop/test" client '("READY"))
+        (with (((id _) (pull-msg server)))
+          (send-msg "mmop/test" server (cons id test-frames))
+          (send-msg "mmop/test" server `(,id "test"))
+          (is (pull-msg client) test-frames))))))
 
 (finalize)
