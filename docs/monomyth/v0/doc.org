@@ -34,8 +34,9 @@
   Each MMOP message is a multipart ZeroMQ Message requiring the collection of multiple frames.
 
 ** Versioning
-   The first MMOP frame is the MMOP version, which is a string constructed as
-   ~"MMOP/{version}"~ where the only current version is 0.
+   The first MMOP frame (that is the first non-routing frame) is the MMOP version,
+   which is a string constructed as ~"MMOP/{version}"~ where the only current
+   version is 0.
    Version 0 makes no promises as to backwards compatibility.
 
 *** Defined Messages

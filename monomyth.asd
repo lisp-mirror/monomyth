@@ -5,6 +5,7 @@
   :components ((:module "src"
                 :components
                 ((:file "main")
+                 (:file "mmop")
                  (:file "node")
                  (:file "rmq-node"
                   :depends-on ("node"))
@@ -18,6 +19,8 @@
                  (:file "master"))))
   :depends-on (:lfarm-server
                :lfarm-client
+               :rutils
+               :pzmq
                :uuid
                :cl-cpus
                :iterate
@@ -39,6 +42,6 @@
   :components ((:module "tests"
                 :components
                 ((:test-file "rmq-node")
-                 (:test-file "rmq-worker"))))
+                 (:test-file "mmop"))))
   :description "Test system for monomyth"
   :perform (test-op (op c) (funcall (intern #.(string :run) :prove) c)))
