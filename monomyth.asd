@@ -6,6 +6,10 @@
                 :components
                 ((:file "main")
                  (:file "mmop")
+                 (:file "mmop-worker"
+                  :components ("mmop"))
+                 (:file "mmop-master"
+                  :components ("mmop"))
                  (:file "node")
                  (:file "rmq-node"
                   :depends-on ("node"))
@@ -20,6 +24,8 @@
   :depends-on (:lfarm-server
                :lfarm-client
                :rutils
+               :trivia
+               :alexandria
                :pzmq
                :uuid
                :cl-cpus

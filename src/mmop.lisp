@@ -1,6 +1,9 @@
 (defpackage monomyth/mmop
   (:use :cl :rutils.bind)
-  (:export mmop-error/version
+  (:export *mmop-v0*
+           *mmop-verions*
+           mmop-error
+           mmop-error/version
            mmop-error/message
            send-msg
            pull-msg))
@@ -31,7 +34,7 @@
               :message (format nil "zmq error: ~a" (pzmq:strerror))))
      (:no-error (res) res)))
 
-(defun send-msg (version socket frames)
+(defun send-msg (socket version frames)
   "Helper function that sends a set of frames as single message"
   (handle-libzmq-error version
     (let ((len (length frames)))
@@ -44,7 +47,6 @@
   "Pulls down all message frames"
   (handler-case
       (iter:iterate
-        (format t "b")
         (iter:for (frame nxt) = (multiple-value-list
                                  (pzmq:recv-string socket)))
         (iter:collect frame)
