@@ -88,7 +88,7 @@
 
 **** Start Node Succeeded [start-node-success]
 
-     The start-node-success message is send from a worker server to the master server
+     The start-node-success message is sent from a worker server to the master server
      in response to the start-node recipe, indicating that the node thread has been
      successfully spun up.
 
@@ -97,3 +97,12 @@
      2. ~<recipe type>~
 
 **** Start Node Failed [start-node-failure]
+
+     The start-node-failure message is sent from a worker server to the master server
+     in response to the start-node recipe, indicating that the node thread has failed
+     to spin up.
+
+     Frames:
+     1. ~START-NODE-FAILURE~
+     2. ~<recipe type>~
+     3. ~<reason-string>~

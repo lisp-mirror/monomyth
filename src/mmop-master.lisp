@@ -7,7 +7,11 @@
            make-start-node-v0
            start-node-success-v0
            start-node-success-v0-client-id
-           start-node-success-v0-type))
+           start-node-success-v0-type
+           start-node-failure-v0
+           start-node-failure-v0-client-id
+           start-node-failure-v0-type
+           start-node-failure-v0-reason))
 (in-package :monomyth/mmop-master)
 
 (defstruct (worker-ready-v0 (:constructor make-worker-ready-v0 (client-id)))
@@ -30,6 +34,13 @@
   (client-id (error "client id must be set") :read-only t)
   (type (error "type must be set") :read-only t))
 
+(defstruct (start-node-failure-v0
+            (:constructor make-start-node-failure-v0 (client-id type reason)))
+  "MMOP/0 start-node-failure"
+  (client-id (error "client id must be set") :read-only t)
+  (type (error "type must be set") :read-only t)
+  (reason (error "reason must be set") :read-only t))
+
 (defun pull-master-message (socket)
   "pulls down a message designed for the master router socket and attempts to
 translate it into an equivalent struct"
@@ -46,7 +57,9 @@ translate it into an equivalent struct"
   (let ((res (trivia:match args
                ((list "READY") (make-worker-ready-v0 id))
                ((list "START-NODE-SUCCESS" node-type)
-                (make-start-node-success-v0 id node-type)))))
+                (make-start-node-success-v0 id node-type))
+               ((list "START-NODE-FAILURE" node-type reason)
+                (make-start-node-failure-v0 id node-type reason)))))
 
     (if res res
         (error 'mmop-error :version *mmop-v0* :message "unknown mmop command"))))

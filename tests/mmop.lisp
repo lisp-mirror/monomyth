@@ -122,4 +122,21 @@
           (is (mmop-m:start-node-success-v0-client-id res) client-name)
           (is (mmop-m:start-node-success-v0-type res) "TEST"))))))
 
+(subtest "MMOP/0 worker-ready-failure"
+  (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+        (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
+    (pzmq:with-context nil
+      (pzmq:with-sockets ((server :router) (client :dealer))
+        (pzmq:setsockopt server :identity server-name)
+        (pzmq:setsockopt client :identity client-name)
+        (pzmq:connect client "ipc://test.ipc")
+        (pzmq:bind server "ipc://test.ipc")
+
+        (send-msg client *mmop-v0* (mmop-w:make-start-node-failure-v0 "TEST" "test"))
+        (let ((res (mmop-m:pull-master-message server)))
+          (is-type res 'mmop-m:start-node-failure-v0)
+          (is (mmop-m:start-node-failure-v0-client-id res) client-name)
+          (is (mmop-m:start-node-failure-v0-type res) "TEST")
+          (is (mmop-m:start-node-failure-v0-reason res) "test"))))))
+
 (finalize)
