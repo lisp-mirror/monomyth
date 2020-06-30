@@ -67,3 +67,25 @@
 
      Frames:
      1. ~"READY"~
+
+**** Start Node [start-node]
+
+     The start-node message is sent from the master server to a worker using
+     the supplied recipe.
+     The supplied recipe (~<recipe byte array>~) is the result of serializing the
+     recipe object using ~cl-store~ and ~flexi-streams~.
+     Note that, for the transform function, while possible to serialize functions it
+     requires that the function exist on the sent machine, which can be difficult to
+     ensure at runtime (see ~lfarm~ for examples).
+     Instead, the node recipes store the lambda form, which is then read into the node.
+     This should result in a response from the worker, either a start-node-success
+     or a start-node-failure.
+
+     Frames:
+     1. ~"START-NODE"~
+     2. ~"<recipe type>"~
+     3. ~<recipe byte array>~
+
+**** Start Node Succeeded [start-node-success]
+
+**** Start Node Failed [start-node-failure]

@@ -5,7 +5,8 @@
            make-worker-ready-v0))
 (in-package :monomyth/mmop-worker)
 
-(defstruct (worker-ready-v0 (:constructor make-worker-ready-v0 ())))
+(defstruct (worker-ready-v0 (:constructor make-worker-ready-v0 ()))
+  "MMOP/0 worker-ready")
 
 (defun send-worker-message (socket message)
   "takes the dealer socket and a message struct and sends the equivalent zmq frames"
