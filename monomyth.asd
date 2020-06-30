@@ -23,6 +23,8 @@
                  (:file "master"))))
   :depends-on (:lfarm-server
                :lfarm-client
+               :flexi-streams
+               :cl-store
                :rutils
                :trivia
                :alexandria
@@ -48,6 +50,7 @@
   :components ((:module "tests"
                 :components
                 ((:test-file "rmq-node")
+                 (:test-file "rmq-node-recipe")
                  (:test-file "mmop"))))
   :description "Test system for monomyth"
   :perform (test-op (op c) (funcall (intern #.(string :run) :prove) c)))

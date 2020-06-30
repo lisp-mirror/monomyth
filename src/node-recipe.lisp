@@ -1,10 +1,12 @@
 (defpackage monomyth/node-recipe
-  (:use :cl :uuid)
+  (:use :cl :uuid :lfarm)
   (:export node-recipe
            node-recipe/type
            node-recipe/transform-fn
            node-recipe/batch-size
-           name-node))
+           name-node
+           serialize-recipe
+           deserialize-recipe))
 (in-package :monomyth/node-recipe)
 
 (defgeneric name-node (recipe)
@@ -18,7 +20,7 @@
    (transform-fn :reader node-recipe/transform-fn
                  :initarg :transform-fn
                  :initform (error "recipe transform function must be set")
-                 :documentation "the function that is passed directly to the node")
+                 :documentation "the function form that is passed directly to the node")
    (batch-size :reader node-recipe/batch-size
                :initarg :batch-size
                :documentation "the batch size that is passed directly to the node
@@ -27,3 +29,13 @@ if not set uses the default"))
 
 (defmethod name-node ((recipe node-recipe))
   (format nil "~a:~a" (node-recipe/type recipe) (make-v4-uuid)))
+
+(defun serialize-recipe (recipe)
+  "turns the recipe into a buffer acceptable to ZMQ"
+  (flex:with-output-to-sequence (strm)
+    (cl-store:store recipe strm)))
+
+(defun deserialize-recipe (buffer)
+  "turns a serialized buffer back into a recipe"
+  (flex:with-input-from-sequence (in buffer)
+    (cl-store:restore in)))
