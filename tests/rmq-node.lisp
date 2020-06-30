@@ -19,7 +19,7 @@
 (subtest "test-full-message-path"
   (let ((test-msg (format nil "test-~d" (get-universal-time))))
     (ok (getf (send-message *node* *source-queue* test-msg) :success))
-    (sleep 1)
+    (sleep .1)
     (let* ((got-msg (get-message *node*))
            (inner-msg (getf got-msg :result)))
       (ok (getf got-msg :success))
@@ -35,14 +35,14 @@
 (subtest "nack works as expected (requeue)"
   (let ((test-msg (format nil "test-~d" (get-universal-time))))
     (ok (getf (send-message *node* *source-queue* test-msg) :success))
-    (sleep 1)
+    (sleep .1)
     (let* ((got-msg (get-message *node*))
            (inner-msg (getf got-msg :result)))
       (ok (getf got-msg :success))
       (ok (not (getf got-msg :timeout)))
       (is (rmq-message-body inner-msg) test-msg)
       (ok (getf (nack-message *node* inner-msg t) :success)))
-    (sleep 1)
+    (sleep .1)
     (let* ((got-msg (get-message *node*))
            (inner-msg (getf got-msg :result)))
       (ok (getf got-msg :success))
@@ -53,14 +53,14 @@
 (subtest "nack works as expected (no requeue)"
   (let ((test-msg (format nil "test-~d" (get-universal-time))))
     (ok (getf (send-message *node* *source-queue* test-msg) :success))
-    (sleep 1)
+    (sleep .1)
     (let* ((got-msg (get-message *node*))
            (inner-msg (getf got-msg :result)))
       (ok (getf got-msg :success))
       (ok (not (getf got-msg :timeout)))
       (is (rmq-message-body inner-msg) test-msg)
       (ok (getf (nack-message *node* inner-msg nil) :success)))
-    (sleep 1)
+    (sleep .1)
     (let* ((got-msg (get-message *node*)))
       (ok (getf got-msg :success))
       (ok (getf got-msg :timeout))
@@ -77,7 +77,7 @@
      (iter:repeat 10)
      (send-message *node* *source-queue* "testing"))
 
-   (sleep 1)
+   (sleep .1)
 
    (let* ((result (pull-items *node*))
           (items (getf result :items)))
@@ -92,7 +92,7 @@
     (iter:repeat 5)
     (send-message *node* *source-queue* "testing"))
 
-  (sleep 1)
+  (sleep .1)
 
   (let* ((result (pull-items *node*))
          (items (getf result :items)))
@@ -116,7 +116,7 @@
       (iter:for item in items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((got-items (pull-items *node*)))
       (ok (getf got-items :success))
@@ -144,7 +144,7 @@
       (iter:for item in items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((got-items (pull-items *node*)))
       (ok (getf got-items :success))
@@ -177,13 +177,13 @@
       (iter:for item in items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((first-got-items (pull-items *node*)))
       (ok (getf first-got-items :success))
       (ok (getf (place-items *node* first-got-items) :success))
 
-      (sleep 1)
+      (sleep .1)
 
       (let ((second-got-items (pull-items *checking-node*)))
         (ok (getf second-got-items :success))
@@ -206,7 +206,7 @@
       (iter:for item in items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((got-items (pull-items *node*)))
       (ok (getf got-items :success))
@@ -227,7 +227,7 @@
       (iter:for item in items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((got-items (pull-items *node*)))
       (ok (getf got-items :success))
@@ -258,7 +258,7 @@
     (iter:for item in '("1" "2" "3" "4" "5"))
     (send-message *node* *source-queue* item))
 
-  (sleep 1)
+  (sleep .1)
 
   (let ((got-items (pull-items *node*)))
     (ok (getf got-items :success))
@@ -267,7 +267,7 @@
     (is (handle-failure *node* :transform got-items)
         got-items)
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((final-items (pull-items *checking-node*)))
       (ok (getf final-items :success))
@@ -285,7 +285,7 @@
     (iter:for item in '("1" "2" "3" "4" "5"))
     (send-message *node* *source-queue* item))
 
-  (sleep 1)
+  (sleep .1)
 
   (let ((got-items (pull-items *node*)))
     (ok (getf got-items :success))
@@ -296,7 +296,7 @@
       (is (handle-failure *node* :transform got-items)
           got-items))
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((final-items (pull-items *node*)))
       (ok (getf final-items :success))
@@ -314,7 +314,7 @@
     (iter:for item in '("1" "2" "3" "4" "5"))
     (send-message *node* *source-queue* item))
 
-  (sleep 1)
+  (sleep .1)
 
   (let ((got-items (pull-items *node*)))
     (ok (getf got-items :success))
@@ -323,7 +323,7 @@
     (is (handle-failure *node* :place got-items)
         got-items)
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((final-items (pull-items *checking-node*)))
       (ok (getf final-items :success))
@@ -341,7 +341,7 @@
     (iter:for item in '("1" "2" "3" "4" "5"))
     (send-message *node* *source-queue* item))
 
-  (sleep 1)
+  (sleep .1)
 
   (let ((got-items (pull-items *node*)))
     (ok (getf got-items :success))
@@ -352,7 +352,7 @@
       (is (handle-failure *node* :place got-items)
           got-items))
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((final-items (pull-items *node*)))
       (ok (getf final-items :success))
@@ -381,13 +381,13 @@
       (iter:for item in test-items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (iter:iterate
       (iter:repeat 5)
       (ok (getf (run-iteration *node*) :success)))
 
-    (sleep 1)
+    (sleep .1)
 
     (let* ((got-items (pull-items *checking-node*))
            (inner-got-items (getf got-items :items)))
@@ -415,7 +415,7 @@
       (iter:for item in test-items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (iter:iterate
       (iter:repeat 5)
@@ -424,7 +424,7 @@
           `(:error "test" :items ,(getf items :items)))
         (ok (not (getf (run-iteration *node*) :success)))))
 
-    (sleep 1)
+    (sleep .1)
 
     (let* ((got-items (pull-items *checking-node*))
            (inner-got-items (getf got-items :items)))
@@ -442,7 +442,7 @@
       (iter:for item in test-items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (iter:iterate
       (iter:repeat 5)
@@ -451,7 +451,7 @@
           `(:error "test" :items ,(getf items :items)))
         (ok (not (getf (run-iteration *node*) :success)))))
 
-    (sleep 1)
+    (sleep .1)
 
     (let* ((got-items (pull-items *checking-node*))
            (inner-got-items (getf got-items :items)))
