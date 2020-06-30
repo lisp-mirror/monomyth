@@ -80,7 +80,7 @@ uses universal time"))
     (end-kernel :wait t)))
 
 (defmethod name-worker ((worker worker))
-  (format nil "lfarm-client-~a" (worker/address worker)))
+  (format nil "lfarm-worker-~a" (worker/address worker)))
 
 (defmethod start-node ((worker worker) (node node))
   (iter:iterate
