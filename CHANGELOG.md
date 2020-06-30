@@ -12,3 +12,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Started basic high level docs.
 - Added MMOP/0 worker-ready.
 - Added MMOP/0 start-node.
+- Added MMOP/0 start-node-success.

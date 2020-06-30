@@ -4,7 +4,10 @@
   (:export pull-master-message
            worker-ready-v0
            worker-ready-v0-client-id
-           make-start-node-v0))
+           make-start-node-v0
+           start-node-success-v0
+           start-node-success-v0-client-id
+           start-node-success-v0-type))
 (in-package :monomyth/mmop-master)
 
 (defstruct (worker-ready-v0 (:constructor make-worker-ready-v0 (client-id)))
@@ -21,6 +24,12 @@
       ,(symbol-name (node-recipe/type recipe))
       ,(serialize-recipe recipe))))
 
+(defstruct (start-node-success-v0
+            (:constructor make-start-node-success-v0 (client-id type)))
+  "MMOP/0 start-node-success"
+  (client-id (error "client id must be set") :read-only t)
+  (type (error "type must be set") :read-only t))
+
 (defun pull-master-message (socket)
   "pulls down a message designed for the master router socket and attempts to
 translate it into an equivalent struct"
@@ -35,7 +44,9 @@ translate it into an equivalent struct"
 (defun translate-v0 (id args)
   "attempts to translate the arg frames into MMOP/0 structs"
   (let ((res (trivia:match args
-               ((list "READY") (make-worker-ready-v0 id)))))
+               ((list "READY") (make-worker-ready-v0 id))
+               ((list "START-NODE-SUCCESS" node-type)
+                (make-start-node-success-v0 id node-type)))))
 
     (if res res
         (error 'mmop-error :version *mmop-v0* :message "unknown mmop command"))))
