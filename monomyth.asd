@@ -5,15 +5,15 @@
   :components ((:module "src"
                 :components
                 ((:file "main")
+                 (:file "node-recipe")
                  (:file "mmop")
                  (:file "mmop-worker"
                   :components ("mmop"))
                  (:file "mmop-master"
-                  :components ("mmop"))
+                  :components ("mmop" "node-recipe"))
                  (:file "node")
                  (:file "rmq-node"
                   :depends-on ("node"))
-                 (:file "node-recipe")
                  (:file "rmq-node-recipe"
                   :depends-on ("node-recipe"))
                  (:file "worker"

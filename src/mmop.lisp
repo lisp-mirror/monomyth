@@ -5,6 +5,8 @@
            mmop-error
            mmop-error/version
            mmop-error/message
+           send-msg-frames
+           create-frames
            send-msg
            pull-msg))
 (in-package :monomyth/mmop)
@@ -34,14 +36,28 @@
               :message (format nil "zmq error: ~a" (pzmq:strerror))))
      (:no-error (res) res)))
 
-(defun send-msg (socket version frames)
+(defun send-msg-frames (socket version frames)
   "Helper function that sends a set of frames as single message"
   (handle-libzmq-error version
     (let ((len (length frames)))
       (iter:iterate
         (iter:for frame in frames)
         (iter:for i upfrom 1)
-        (pzmq:send socket frame :sndmore (/= len i))))))
+        (typecase frame
+          (string (pzmq:send socket frame :sndmore (/= len i)))
+          ((vector (unsigned-byte 8))
+           (progn
+             (cffi-sys:with-pointer-to-vector-data (ptr (subseq frame 0))
+               (pzmq:send socket ptr :len (length frame) :sndmore (/= len i)))))
+          (t (error 'mmop-error :version version
+                    :message "unrecognized frame type")))))))
+
+(defgeneric create-frames (message)
+  (:documentation "takes a message struct and builds a lisp of zmq frames to be sent"))
+
+(defun send-msg (socket version msg)
+  "translates a message struct into frames, and then sends them"
+  (send-msg-frames socket version (create-frames msg)))
 
 (defun pull-msg (socket)
   "Pulls down all message frames"

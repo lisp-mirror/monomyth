@@ -24,7 +24,6 @@
   (let ((args `(rmq-node-recipe :type ,node-type :transform-fn ,transform-fn
                                 :source ,source-queue :dest ,dest-queue)))
     (if batch-size (setf args (append args `(:batch-size ,batch-size))))
-    (print args)
     (apply #'make-instance args)))
 
 (defmethod name-fail-queue ((recipe rmq-node-recipe))

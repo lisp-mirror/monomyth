@@ -3,29 +3,23 @@
   (:use :cl :rutils.bind :monomyth/mmop :monomyth/node-recipe)
   (:export pull-master-message
            worker-ready-v0
-           worker-ready-v0-client-id))
+           worker-ready-v0-client-id
+           make-start-node-v0))
 (in-package :monomyth/mmop-master)
 
 (defstruct (worker-ready-v0 (:constructor make-worker-ready-v0 (client-id)))
   "MMOP/0 worker-ready"
   (client-id (error "client id must be set") :read-only t))
+
 (defstruct (start-node-v0 (:constructor make-start-node-v0 (client-id recipe)))
   "MMOP/0 start-node"
   (client-id (error "client id must be set") :read-only t)
   (recipe (error "recipe must be set") :read-only t))
-
-(defun send-master-message (socket message)
-  "takes the dealer socket and a message struct and sends the equivalent zmq frames"
-  (unless (trivia:match message
-            ((start-node-v0 client-id recipe)
-             (progn
-               (send-msg socket *mmop-v0*
-                         `(,client-id ,*mmop-v0* "START-NODE"
-                                      ,(symbol-name (node-recipe/type recipe))
-                                      ,(serialize-recipe recipe)))
-               t)))
-
-    (error 'mmop-error :message "unknown master message type")))
+(defmethod create-frames ((message start-node-v0))
+  (let ((recipe (start-node-v0-recipe message)))
+    `(,(start-node-v0-client-id message) ,*mmop-v0* "START-NODE"
+      ,(symbol-name (node-recipe/type recipe))
+      ,(serialize-recipe recipe))))
 
 (defun pull-master-message (socket)
   "pulls down a message designed for the master router socket and attempts to

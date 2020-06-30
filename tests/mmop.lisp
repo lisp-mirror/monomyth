@@ -1,5 +1,5 @@
 (defpackage monomyth/tests/mmop
-  (:use :cl :prove :monomyth/mmop))
+  (:use :cl :prove :monomyth/mmop :monomyth/rmq-node-recipe :monomyth/node-recipe))
 (in-package :monomyth/tests/mmop)
 
 (plan nil)
@@ -15,7 +15,7 @@
         (pzmq:connect client "ipc://test.ipc")
         (pzmq:bind server "ipc://test.ipc")
 
-        (send-msg client "mmop/test" test-frames)
+        (send-msg-frames client "mmop/test" test-frames)
         (is (pull-msg server)
             (cons client-name test-frames))))))
 
@@ -30,8 +30,8 @@
         (pzmq:connect client "ipc://test.ipc")
         (pzmq:bind server "ipc://test.ipc")
 
-        (send-msg client "mmop/test" test-frames)
-        (send-msg client "mmop/test" '("test"))
+        (send-msg-frames client "mmop/test" test-frames)
+        (send-msg-frames client "mmop/test" '("test"))
         (is (pull-msg server)
             (cons client-name test-frames))))))
 
@@ -46,9 +46,9 @@
         (pzmq:connect client "ipc://test.ipc")
         (pzmq:bind server "ipc://test.ipc")
 
-        (send-msg client "mmop/test" '("READY"))
+        (send-msg-frames client "mmop/test" '("READY"))
         (pull-msg server)
-        (send-msg server "mmop/test" (cons client-name test-frames))
+        (send-msg-frames server "mmop/test" (cons client-name test-frames))
         (is (pull-msg client) test-frames)))))
 
 (subtest "msg-happy-path-to-dealer-with-second-msg"
@@ -62,10 +62,10 @@
         (pzmq:connect client "ipc://test.ipc")
         (pzmq:bind server "ipc://test.ipc")
 
-        (send-msg client "mmop/test" '("READY"))
+        (send-msg-frames client "mmop/test" '("READY"))
         (pull-msg server)
-        (send-msg server "mmop/test" (cons client-name test-frames))
-        (send-msg server "mmop/test" `(,client-name "test"))
+        (send-msg-frames server "mmop/test" (cons client-name test-frames))
+        (send-msg-frames server "mmop/test" `(,client-name "test"))
         (is (pull-msg client) test-frames)))))
 
 (subtest "MMOP/0 worker-ready"
@@ -78,9 +78,32 @@
         (pzmq:connect client "ipc://test.ipc")
         (pzmq:bind server "ipc://test.ipc")
 
-        (mmop-w:send-worker-message client (mmop-w:make-worker-ready-v0))
+        (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
         (let ((res (mmop-m:pull-master-message server)))
-          (is (type-of res) 'mmop-m:worker-ready-v0)
+          (is-type res 'mmop-m:worker-ready-v0)
           (is (mmop-m:worker-ready-v0-client-id res) client-name))))))
+
+(subtest "MMOP/0 start-node"
+  (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+        (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
+        (recipe (build-rmq-node-recipe :test "#'(lambda (x) (1+ x))" "test-s" "test-d")))
+    (pzmq:with-context nil
+      (pzmq:with-sockets ((server :router) (client :dealer))
+        (pzmq:setsockopt server :identity server-name)
+        (pzmq:setsockopt client :identity client-name)
+        (pzmq:connect client "ipc://test.ipc")
+        (pzmq:bind server "ipc://test.ipc")
+
+        (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
+        (mmop-m:pull-master-message server)
+        (send-msg server *mmop-v0* (mmop-m:make-start-node-v0 client-name recipe))
+        (let ((res (mmop-w:pull-worker-message client)))
+          (is-type res 'mmop-w:start-node-v0)
+          (is (mmop-w:start-node-v0-type res) "TEST")
+          (let ((got-res (mmop-w:start-node-v0-recipe res)))
+            (is (node-recipe/type got-res) (node-recipe/type recipe))
+            (is (node-recipe/transform-fn got-res) (node-recipe/transform-fn recipe))
+            (is (rmq-node-recipe/source-queue got-res) (rmq-node-recipe/source-queue recipe))
+            (is (rmq-node-recipe/dest-queue got-res) (rmq-node-recipe/dest-queue recipe))))))))
 
 (finalize)
