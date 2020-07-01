@@ -10,8 +10,8 @@
   The structure and manipulation of this data is largely defined by the user
   (though there are data stream specific aspects certain node types might handle).
   Monomyth itself handles all aspects of system orchestration via MMOP.
-  The work itself is done on a group of concurrent workers that use user defined
-  nodes to process the data and are controlled by a single master server.
+  The work itself is done on a group of distributed workers that use concurrent,
+  user defined nodes to process the data and are controlled by a single master server.
 
 * System Architecture
   [[./system.png]]
