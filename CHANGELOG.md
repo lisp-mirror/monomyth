@@ -14,3 +14,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added MMOP/0 start-node.
 - Added MMOP/0 start-node-success.
 - Added MMOP/0 start-node-failure.
+- Added node recipe system for constructing node threads.
