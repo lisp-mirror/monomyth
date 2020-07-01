@@ -1,5 +1,5 @@
 (defpackage monomyth/tests/rmq-node
-  (:use :cl :prove :monomyth/node :monomyth/rmq-node :cl-mock))
+  (:use :cl :prove :monomyth/node :monomyth/rmq-node :cl-mock :cl-rabbit))
 (in-package :monomyth/tests/rmq-node)
 
 (plan nil)
@@ -19,7 +19,7 @@
 (subtest "test-full-message-path"
   (let ((test-msg (format nil "test-~d" (get-universal-time))))
     (ok (getf (send-message *node* *source-queue* test-msg) :success))
-    (sleep 1)
+    (sleep .1)
     (let* ((got-msg (get-message *node*))
            (inner-msg (getf got-msg :result)))
       (ok (getf got-msg :success))
@@ -35,14 +35,14 @@
 (subtest "nack works as expected (requeue)"
   (let ((test-msg (format nil "test-~d" (get-universal-time))))
     (ok (getf (send-message *node* *source-queue* test-msg) :success))
-    (sleep 1)
+    (sleep .1)
     (let* ((got-msg (get-message *node*))
            (inner-msg (getf got-msg :result)))
       (ok (getf got-msg :success))
       (ok (not (getf got-msg :timeout)))
       (is (rmq-message-body inner-msg) test-msg)
       (ok (getf (nack-message *node* inner-msg t) :success)))
-    (sleep 1)
+    (sleep .1)
     (let* ((got-msg (get-message *node*))
            (inner-msg (getf got-msg :result)))
       (ok (getf got-msg :success))
@@ -53,21 +53,22 @@
 (subtest "nack works as expected (no requeue)"
   (let ((test-msg (format nil "test-~d" (get-universal-time))))
     (ok (getf (send-message *node* *source-queue* test-msg) :success))
-    (sleep 1)
+    (sleep .1)
     (let* ((got-msg (get-message *node*))
            (inner-msg (getf got-msg :result)))
       (ok (getf got-msg :success))
       (ok (not (getf got-msg :timeout)))
       (is (rmq-message-body inner-msg) test-msg)
       (ok (getf (nack-message *node* inner-msg nil) :success)))
-    (sleep 1)
+    (sleep .1)
     (let* ((got-msg (get-message *node*)))
       (ok (getf got-msg :success))
       (ok (getf got-msg :timeout))
       (is (getf got-msg :items) nil))))
 
 (shutdown *node*)
-(setf *node* (make-rmq-node nil (format nil "test-rmq-node-~d" (get-universal-time))
+(setf *node* (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
+                            (format nil "test-rmq-node-~d" (get-universal-time))
                             *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 10))
 (startup *node*)
 
@@ -76,7 +77,7 @@
      (iter:repeat 10)
      (send-message *node* *source-queue* "testing"))
 
-   (sleep 1)
+   (sleep .1)
 
    (let* ((result (pull-items *node*))
           (items (getf result :items)))
@@ -91,7 +92,7 @@
     (iter:repeat 5)
     (send-message *node* *source-queue* "testing"))
 
-  (sleep 1)
+  (sleep .1)
 
   (let* ((result (pull-items *node*))
          (items (getf result :items)))
@@ -108,6 +109,63 @@
       (ok (not (getf result :success)))
       (is (getf result :error) "test"))))
 
+(subtest "transform-items success"
+  (let ((items `("1" "2" "3" "4" "5" "6" "7" "8" "9" "10")))
+
+    (iter:iterate
+      (iter:for item in items)
+      (send-message *node* *source-queue* item))
+
+    (sleep .1)
+
+    (let ((got-items (pull-items *node*)))
+      (ok (getf got-items :success))
+
+      (let ((new-items (transform-items *node* got-items)))
+        (ok (getf new-items :success))
+        (is (length (getf new-items :items)) 10)
+
+        (iter:iterate
+          (iter:for expect in items)
+          (iter:for got in (getf new-items :items))
+          (is (rmq-message-body got) (format nil "test ~a" expect))
+          (ack-message *node* got))))))
+
+(shutdown *node*)
+(setf *node* (make-rmq-node #'(lambda (x) (declare (ignore x)) (error "test"))
+                            (format nil "test-rmq-node-~d" (get-universal-time))
+                            *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 10))
+(startup *node*)
+
+(subtest "transform-items failure"
+  (let ((items `("1" "2" "3" "4" "5" "6" "7" "8" "9" "10")))
+
+    (iter:iterate
+      (iter:for item in items)
+      (send-message *node* *source-queue* item))
+
+    (sleep .1)
+
+    (let ((got-items (pull-items *node*)))
+      (ok (getf got-items :success))
+
+      (let ((new-items (transform-items *node* got-items)))
+        (ok (not (getf new-items :success)))
+        (is (length (getf new-items :items)) 10)
+        (is-error (getf new-items :error) 'simple-error)
+
+        (iter:iterate
+          (iter:for expect in items)
+          (iter:for got in (getf new-items :items))
+          (is (rmq-message-body got) expect)
+          (ack-message *node* got))))))
+
+(shutdown *node*)
+(setf *node* (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
+                            (format nil "test-rmq-node-~d" (get-universal-time))
+                            *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 10))
+(startup *node*)
+
 (defvar *checking-node* (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
                                        *conn* 2 *dest-queue* *source-queue* *fail-queue* :batch-size 10))
 (startup *checking-node*)
@@ -119,13 +177,13 @@
       (iter:for item in items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((first-got-items (pull-items *node*)))
       (ok (getf first-got-items :success))
       (ok (getf (place-items *node* first-got-items) :success))
 
-      (sleep 1)
+      (sleep .1)
 
       (let ((second-got-items (pull-items *checking-node*)))
         (ok (getf second-got-items :success))
@@ -148,7 +206,7 @@
       (iter:for item in items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((got-items (pull-items *node*)))
       (ok (getf got-items :success))
@@ -169,7 +227,7 @@
       (iter:for item in items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((got-items (pull-items *node*)))
       (ok (getf got-items :success))
@@ -200,7 +258,7 @@
     (iter:for item in '("1" "2" "3" "4" "5"))
     (send-message *node* *source-queue* item))
 
-  (sleep 1)
+  (sleep .1)
 
   (let ((got-items (pull-items *node*)))
     (ok (getf got-items :success))
@@ -209,7 +267,7 @@
     (is (handle-failure *node* :transform got-items)
         got-items)
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((final-items (pull-items *checking-node*)))
       (ok (getf final-items :success))
@@ -227,7 +285,7 @@
     (iter:for item in '("1" "2" "3" "4" "5"))
     (send-message *node* *source-queue* item))
 
-  (sleep 1)
+  (sleep .1)
 
   (let ((got-items (pull-items *node*)))
     (ok (getf got-items :success))
@@ -238,7 +296,7 @@
       (is (handle-failure *node* :transform got-items)
           got-items))
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((final-items (pull-items *node*)))
       (ok (getf final-items :success))
@@ -256,7 +314,7 @@
     (iter:for item in '("1" "2" "3" "4" "5"))
     (send-message *node* *source-queue* item))
 
-  (sleep 1)
+  (sleep .1)
 
   (let ((got-items (pull-items *node*)))
     (ok (getf got-items :success))
@@ -265,7 +323,7 @@
     (is (handle-failure *node* :place got-items)
         got-items)
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((final-items (pull-items *checking-node*)))
       (ok (getf final-items :success))
@@ -283,7 +341,7 @@
     (iter:for item in '("1" "2" "3" "4" "5"))
     (send-message *node* *source-queue* item))
 
-  (sleep 1)
+  (sleep .1)
 
   (let ((got-items (pull-items *node*)))
     (ok (getf got-items :success))
@@ -294,7 +352,7 @@
       (is (handle-failure *node* :place got-items)
           got-items))
 
-    (sleep 1)
+    (sleep .1)
 
     (let ((final-items (pull-items *node*)))
       (ok (getf final-items :success))
@@ -309,9 +367,7 @@
 
 (shutdown *node*)
 (shutdown *checking-node*)
-(setf *node* (make-rmq-node #'(lambda (x) (build-rmq-message
-                                           :body (format nil "test ~a" (rmq-message-body x))
-                                           :delivery-tag (rmq-message-delivery-tag x)))
+(setf *node* (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
                             (format nil "test-rmq-node-~d" (get-universal-time))
                             *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 1))
 (setf *checking-node* (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
@@ -325,13 +381,13 @@
       (iter:for item in test-items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (iter:iterate
       (iter:repeat 5)
       (ok (getf (run-iteration *node*) :success)))
 
-    (sleep 1)
+    (sleep .1)
 
     (let* ((got-items (pull-items *checking-node*))
            (inner-got-items (getf got-items :items)))
@@ -359,7 +415,7 @@
       (iter:for item in test-items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (iter:iterate
       (iter:repeat 5)
@@ -368,7 +424,7 @@
           `(:error "test" :items ,(getf items :items)))
         (ok (not (getf (run-iteration *node*) :success)))))
 
-    (sleep 1)
+    (sleep .1)
 
     (let* ((got-items (pull-items *checking-node*))
            (inner-got-items (getf got-items :items)))
@@ -386,7 +442,7 @@
       (iter:for item in test-items)
       (send-message *node* *source-queue* item))
 
-    (sleep 1)
+    (sleep .1)
 
     (iter:iterate
       (iter:repeat 5)
@@ -395,7 +451,7 @@
           `(:error "test" :items ,(getf items :items)))
         (ok (not (getf (run-iteration *node*) :success)))))
 
-    (sleep 1)
+    (sleep .1)
 
     (let* ((got-items (pull-items *checking-node*))
            (inner-got-items (getf got-items :items)))
@@ -412,5 +468,6 @@
 (delete-queue *node* *fail-queue*)
 (shutdown *node*)
 (shutdown *checking-node*)
+(destroy-connection *conn*)
 
 (finalize)

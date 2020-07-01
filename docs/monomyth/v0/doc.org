@@ -1,0 +1,108 @@
+#+TITLE: Monomyth
+#+AUTHOR: Paul Ricks
+
+* Introduction
+  Monomyth is a distributed data processing system built using Common Lisp.
+  It is designed to split the messaging systems into two, one defined and
+  controlled by Monomyth, and one defined and controlled by the user.
+  The messaging controlled by the user pertains only to data, which moves between
+  persisted data streams and node threads.
+  The structure and manipulation of this data is largely defined by the user
+  (though there are data stream specific aspects certain node types might handle).
+  Monomyth itself handles all aspects of system orchestration via MMOP.
+  The work itself is done on a group of concurrent workers that use user defined
+  nodes to process the data and are controlled by a single master server.
+
+* System Architecture
+  [[./system.png]]
+
+  Monomyth is split into four distinct pieces.
+  The first is the data stream; an outside system that persists data so that,
+  should Monomyth fail, the data remains safe.
+  This allows for a fail fast structure.
+
+  The second is the Nodes.
+  These nodes handle a single distinct action on a single thread.
+  They first pick up a batch of data from the data stream, act on it, and place it
+  back on a new stream (or queue) on the outside system.
+
+  The nodes are started and stopped by a worker server.
+  The server takes no other action other than this, nodes cannot by altered.
+  It is assumed that there is a one to one ratio between servers and workers
+  (this assumption simplifies connection management when it comes to the data stream).
+
+  Workers are controlled by a single master server.
+  The master and workers communicate via the Monomyth Orchestration Protocol (MMOP).
+
+* MMOP
+  MMOP is a protocol designed to run on top of ZeroMQ used by master and worker servers.
+  Each MMOP message is a multipart ZeroMQ Message requiring the collection of multiple frames.
+
+** Sockets
+   Currently, the set up is that each worker has a dealer socket and the master
+   uses a single threaded master socket.
+   This allows for full async communication in the future.
+   Note, to make this work, the master server must receive a full message from the
+   workers before then communicating with them.
+
+** Versioning
+   The first MMOP frame (that is the first non-routing frame) is the MMOP version,
+   which is a string constructed as ~MMOP/<version>~ where the only current
+   version is 0.
+   Version 0 makes no promises as to backwards compatibility.
+
+** Common Frames
+   All Messages have a few base frames that are sent the before all messages.
+   The first frame for all worker messages is the MMOP version.
+   The first frame for all master messages is the client identity and the second
+   is the MMOP version.
+
+*** Defined Messages
+
+**** Worker Ready [worker-ready]
+
+     The worker-ready message is sent from a worker server to the master server
+     to indicate that it is up and ready to start nodes.
+     No confirmation message is sent.
+
+     Frames:
+     1. ~READY~
+
+**** Start Node [start-node]
+
+     The start-node message is sent from the master server to a worker using
+     the supplied recipe.
+     The supplied recipe (~<recipe byte array>~) is the result of serializing the
+     recipe object using ~cl-store~ and ~flexi-streams~.
+     Note that, for the transform function, while possible to serialize functions it
+     requires that the function exist on the sent machine, which can be difficult to
+     ensure at runtime (see ~lfarm~ for examples).
+     Instead, the node recipes store the lambda form, which is then read into the node.
+     This should result in a response from the worker, either a start-node-success
+     or a start-node-failure.
+
+     Frames:
+     1. ~START-NODE~
+     2. ~<recipe type>~
+     3. ~<recipe byte array>~
+
+**** Start Node Succeeded [start-node-success]
+
+     The start-node-success message is sent from a worker server to the master server
+     in response to the start-node recipe, indicating that the node thread has been
+     successfully spun up.
+
+     Frames:
+     1. ~START-NODE-SUCCESS~
+     2. ~<recipe type>~
+
+**** Start Node Failed [start-node-failure]
+
+     The start-node-failure message is sent from a worker server to the master server
+     in response to the start-node recipe, indicating that the node thread has failed
+     to spin up.
+
+     Frames:
+     1. ~START-NODE-FAILURE~
+     2. ~<recipe type>~
+     3. ~<reason-string>~

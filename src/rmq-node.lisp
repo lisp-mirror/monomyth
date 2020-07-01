@@ -17,10 +17,12 @@
 (defclass rmq-node (node)
   ((conn :initform (error "connection must be supplied")
          :initarg :conn
-         :reader conn)
+         :reader conn
+         :documentation "the rmq connection, there should only be one per machine")
    (channel :initarg :chan
             :initform (error "channel number must be set")
-            :reader chan)
+            :reader chan
+            :documentation "the connection channel number, should be distinct from all other nodes")
    (exchange :initarg :exchange
              :initform ""
              :reader exchange)
@@ -71,7 +73,7 @@ defaults are the local rabbit-mq defaults"
 (defmethod startup ((node rmq-node))
   "opens a channel using the nodes connection after setting up the socket.
 also ensures all three queues are up and sets up basic consume for the source queue"
-  (vom:info "starting rmq-node ~a" (node-name node))
+  (vom:info "starting rmq-node ~a" (node/node-name node))
   (rabbit-mq-call
    (progn
      (channel-open (conn node) (chan node))
@@ -84,7 +86,7 @@ also ensures all three queues are up and sets up basic consume for the source qu
 (defmethod shutdown ((node rmq-node))
   "closes the channel and then destroys the connection.
 note that this means that once an rmq-node is shutdown, it cannot be started up again"
-  (vom:info "shutting down rmq-node ~a" (node-name node))
+  (vom:info "shutting down rmq-node ~a" (node/node-name node))
   (rabbit-mq-call
    (channel-close (conn node) (chan node))
    (:no-error (res) (declare (ignore res)) '(:success t))))
@@ -134,11 +136,23 @@ return :success t with the :result if things go well"
 (defmethod pull-items ((node rmq-node))
   `(:success t
     :items ,(iter:iterate
-              (iter:repeat (batch-size node))
+              (iter:repeat (node/batch-size node))
               (let ((result (get-message node)))
                 (cond ((getf result :timeout) (iter:finish))
                       ((getf result :success) (iter:collect (getf result :result)))
                       (t (return-from pull-items result)))))))
+
+(defmethod transform-items ((node rmq-node) pulled)
+  (handler-case
+      (iter:iterate
+        (iter:for item in (getf pulled :items))
+        (iter:collect (build-rmq-message
+                       :body (funcall (node/trans-fn node) (rmq-message-body item))
+                       :delivery-tag (rmq-message-delivery-tag item))))
+    (error (c)
+      (vom:error "unexpected error in transformation ~a" c)
+      `(:error ,c :items ,(getf pulled :items)))
+    (:no-error (res) `(:success t :items ,res))))
 
 (defmethod place-items ((node rmq-node) result)
   (iter:iterate

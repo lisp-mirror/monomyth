@@ -1,0 +1,41 @@
+@startuml
+
+() MMOP
+
+Note right of MMOP : Built on ZMQ
+
+database "Data Stream" {
+        [Data Queues]
+}
+
+node "Worker Server 1" {
+        [Data Queues] -- () "Data Stream Connection 1"
+        node "Node Thread 1-1" {
+                () "Data Stream Connection 1" <-- [Node Object 1-1]
+        }
+        node "Node Thread 1-2" {
+                () "Data Stream Connection 1" <-- [Node Object 1-2]
+        }
+        [Node Object 1-1] <-- [Worker Object 1]
+        [Node Object 1-2] <-- [Worker Object 1]
+}
+
+node "Worker Server 2" {
+        [Data Queues] -- () "Data Stream Connection 2"
+        node "Node Thread 2-1" {
+                () "Data Stream Connection 2" <-- [Node Object 2-1]
+        }
+        node "Node Thread 2-2" {
+                () "Data Stream Connection 2" <-- [Node Object 2-2]
+        }
+        [Node Object 2-1] <-- [Worker Object 2]
+        [Node Object 2-2] <-- [Worker Object 2]
+}
+
+node "Master Server" {
+        MMOP -- [Master Object]
+        MMOP -- [Worker Object 1]
+        [Worker Object 2] -- MMOP
+}
+
+@enduml
