@@ -46,14 +46,13 @@
         (typecase frame
           (string (pzmq:send socket frame :sndmore (/= len i)))
           ((vector (unsigned-byte 8))
-           (progn
-             (cffi-sys:with-pointer-to-vector-data (ptr (subseq frame 0))
-               (pzmq:send socket ptr :len (length frame) :sndmore (/= len i)))))
+           (cffi-sys:with-pointer-to-vector-data (ptr (subseq frame 0))
+             (pzmq:send socket ptr :len (length frame) :sndmore (/= len i))))
           (t (error 'mmop-error :version version
                     :message "unrecognized frame type")))))))
 
 (defgeneric create-frames (message)
-  (:documentation "takes a message struct and builds a lisp of zmq frames to be sent"))
+  (:documentation "takes a message struct and builds a list of zmq frames to be sent"))
 
 (defun send-msg (socket version msg)
   "translates a message struct into frames, and then sends them"

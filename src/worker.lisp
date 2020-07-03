@@ -1,97 +1,52 @@
 (defpackage monomyth/worker
-  (:use :cl :monomyth/node :lfarm :lfarm-admin)
+  (:use :cl :uuid :monomyth/mmop :monomyth/mmop-worker)
   (:export worker
-           worker/kernal
-           worker/nodes
+           worker/name
            start-worker
-           stop-worker
-           name-worker
-           build-node
-           remove-node
-           start-node))
+           run-worker
+           stop-worker))
 (in-package :monomyth/worker)
 
-(defparameter *starting-port* 60000)
-
-(defgeneric start-worker (worker)
+(defgeneric start-worker (worker master-address)
   (:documentation "starts the worker processes, by the time this method is done
 it should be okay start a node"))
 
 (defgeneric stop-worker (worker)
-  (:documentation "stops the worker processes"))
-
-(defgeneric name-worker (worker)
-  (:documentation "creates the name that lfarm uses internally for the worker's kernel"))
-
-(defgeneric build-node (worker recipe)
-  (:documentation "constructs a node from a recipe"))
-
-(defgeneric remove-node (worker node-name)
-  (:documentation "removes a node from the worker"))
-
-(defgeneric start-node (worker node)
-  (:documentation "runs the node every interval
-the interval is based on the start time, if the node takes too long
-the next interval is started immediately
-uses universal time"))
+  (:documentation "stops the worker processes and frees all resources and connections"))
 
 (defclass worker ()
-  ((address :reader worker/address
-            :initarg :address
-            :initform (error "worker address must be set")
-            :documentation "ip address of the worker machine")
-   (kernal :accessor worker/kernal
-           :documentation "the lfarm kernal for that machine")
-   (threads :reader worker/threads
-            :initarg :threads
-            :initform (error "worker thread count must be set")
-            :documentation "the number of threads (clients) to start")
-   (nodes :reader worker/nodes
-          :initform (make-hash-table :test #'equal)
-          :documentation "a hash table of node names to nodes")
-   (interval :reader worker/interval
-             :initarg :interval
-             :initform 10
-             :documentation "the minimum time between node cycles, defaults to 10"))
+  ((context :reader worker/context
+            :initform (pzmq:ctx-new)
+            :documentation "the zmq context used for the MMOP")
+   (socket :accessor worker/socket
+           :documentation "the zmq dealer socket used for the MMOP")
+   (name :reader worker/name
+         :initform (name-worker)
+         :documentation "a unique worker name set before startup")
+   (mmop-version :reader worker/mmop-version
+                 :initform *mmop-v0*
+                 :documentation "the MMOP version the worker is using"))
   (:documentation "defines a single machine with its own threads, nodes, and connections"))
 
-(deftask run-node (node) (run-iteration node))
+(defun name-worker ()
+  "creates the name that zmq uses for routing"
+  (format nil "monomyth-worker-~a" (make-v4-uuid)))
 
-(defmethod start-worker ((worker worker))
-  (let* ((address (worker/address worker))
-         (threads
-           (iter:iterate
-             (iter:for port from *starting-port* to
-                       (+ *starting-port* (worker/threads worker) -1))
-             (vom:info "starting worker server on ~a:~a" address port)
-             (lfarm-server:start-server address port :background t)
-             (iter:collect `(,address ,port)))))
-    (vom:info "starting kernel for worker at ~a" address)
-    (setf (worker/kernal worker) (make-kernel threads :name (name-worker worker)))))
+(defmethod start-worker ((worker worker) master-address)
+  (vom:info "starting worker ~a" (worker/name worker))
+  (setf (worker/socket worker) (pzmq:socket (worker/context worker) :dealer))
+  (pzmq:setsockopt (worker/socket worker) :identity (worker/name worker))
+  (pzmq:connect (worker/socket worker) master-address)
+  (send-msg (worker/socket worker) (worker/mmop-version worker) (make-worker-ready-v0)))
+
+(defun run-worker (worker)
+  "main event loop for the worker"
+  (iter:iterate
+    (iter:for msg = (pull-worker-message (worker/socket worker)))
+    (typecase msg
+      (shutdown-worker-v0 (iter:finish)))))
 
 (defmethod stop-worker ((worker worker))
-  (let ((*kernel* (worker/kernal worker)))
-    (iter:iterate
-      (iter:for port from *starting-port* to
-                (+ *starting-port* (worker/threads worker) -1))
-      (vom:info "stopping worker server on ~a:~a" (worker/address worker) port)
-      (end-server (worker/address worker) port))
-    (vom:info "stopping kernal for worker at ~a" (worker/address worker))
-    (end-kernel :wait t)))
-
-(defmethod name-worker ((worker worker))
-  (format nil "lfarm-worker-~a" (worker/address worker)))
-
-(defmethod start-node ((worker worker) (node node))
-  (iter:iterate
-    (let ((*kernel* (worker/kernal worker))
-          (chan (make-channel))
-          (goal (+ (worker/interval worker) (get-universal-time))))
-      (submit-task chan #'run-node node)
-      (receive-result chan)
-      (let ((end (get-universal-time)))
-        (when (> goal end) (sleep (- goal end)))))))
-
-(defmethod remove-node ((worker worker) node-name)
-  (shutdown (gethash node-name (worker/nodes worker)))
-  (remhash node-name (worker/nodes worker)))
+  (vom:info "stopping worker ~a" (worker/name worker))
+  (pzmq:close (worker/socket worker))
+  (pzmq:ctx-destroy (worker/context worker)))

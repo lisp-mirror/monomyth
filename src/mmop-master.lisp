@@ -11,7 +11,8 @@
            start-node-failure-v0
            start-node-failure-v0-client-id
            start-node-failure-v0-type
-           start-node-failure-v0-reason))
+           start-node-failure-v0-reason
+           make-shutdown-worker-v0))
 (in-package :monomyth/mmop-master)
 
 (defstruct (worker-ready-v0 (:constructor make-worker-ready-v0 (client-id)))
@@ -40,6 +41,13 @@
   (client-id (error "client id must be set") :read-only t)
   (type (error "type must be set") :read-only t)
   (reason (error "reason must be set") :read-only t))
+
+(defstruct (shutdown-worker-v0
+            (:constructor make-shutdown-worker-v0 (client-id)))
+  "MMOP/0 stop-worker"
+  (client-id (error "client id must be set") :read-only t))
+(defmethod create-frames ((message shutdown-worker-v0))
+  `(,(shutdown-worker-v0-client-id message) ,*mmop-v0* "SHUTDOWN"))
 
 (defun pull-master-message (socket)
   "pulls down a message designed for the master router socket and attempts to

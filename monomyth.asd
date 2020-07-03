@@ -4,8 +4,7 @@
   :license ""
   :components ((:module "src"
                 :components
-                ((:file "main")
-                 (:file "node-recipe")
+                ((:file "node-recipe")
                  (:file "mmop")
                  (:file "mmop-worker"
                   :components ("mmop"))
@@ -17,26 +16,21 @@
                  (:file "rmq-node-recipe"
                   :depends-on ("node-recipe"))
                  (:file "worker"
-                  :depends-on ("node"))
+                  :depends-on ("node" "mmop" "mmop-worker"))
                  (:file "rmq-worker"
                   :depends-on ("worker" "node" "rmq-node" "node-recipe" "rmq-node-recipe"))
                  (:file "master"))))
-  :depends-on (:lfarm-server
-               :lfarm-client
-               :flexi-streams
+  :depends-on (:flexi-streams
                :cl-store
                :rutils
                :trivia
                :alexandria
                :pzmq
                :uuid
-               :cl-cpus
                :iterate
                :vom
-               :lfarm-admin
                :cl-rabbit
-               :babel
-               :folio2)
+               :babel)
   :description ""
   :in-order-to ((test-op (test-op "monomyth/tests"))))
 
@@ -51,6 +45,7 @@
                 :components
                 ((:test-file "rmq-node")
                  (:test-file "rmq-node-recipe")
-                 (:test-file "mmop"))))
+                 (:test-file "mmop")
+                 (:test-file "rmq-worker"))))
   :description "Test system for monomyth"
   :perform (test-op (op c) (funcall (intern #.(string :run) :prove) c)))

@@ -12,8 +12,8 @@
       (pzmq:with-sockets ((server :router) (client :dealer))
         (pzmq:setsockopt server :identity server-name)
         (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "ipc://test.ipc")
-        (pzmq:bind server "ipc://test.ipc")
+        (pzmq:connect client "tcp://localhost:55555")
+        (pzmq:bind server "tcp://*:55555")
 
         (send-msg-frames client "mmop/test" test-frames)
         (is (pull-msg server)
@@ -27,8 +27,8 @@
       (pzmq:with-sockets ((server :router) (client :dealer))
         (pzmq:setsockopt server :identity server-name)
         (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "ipc://test.ipc")
-        (pzmq:bind server "ipc://test.ipc")
+        (pzmq:connect client "tcp://localhost:55555")
+        (pzmq:bind server "tcp://*:55555")
 
         (send-msg-frames client "mmop/test" test-frames)
         (send-msg-frames client "mmop/test" '("test"))
@@ -43,8 +43,8 @@
       (pzmq:with-sockets ((server :router) (client :dealer))
         (pzmq:setsockopt server :identity server-name)
         (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "ipc://test.ipc")
-        (pzmq:bind server "ipc://test.ipc")
+        (pzmq:connect client "tcp://localhost:55555")
+        (pzmq:bind server "tcp://*:55555")
 
         (send-msg-frames client "mmop/test" '("READY"))
         (pull-msg server)
@@ -59,8 +59,8 @@
       (pzmq:with-sockets ((server :router) (client :dealer))
         (pzmq:setsockopt server :identity server-name)
         (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "ipc://test.ipc")
-        (pzmq:bind server "ipc://test.ipc")
+        (pzmq:connect client "tcp://localhost:55555")
+        (pzmq:bind server "tcp://*:55555")
 
         (send-msg-frames client "mmop/test" '("READY"))
         (pull-msg server)
@@ -75,8 +75,8 @@
       (pzmq:with-sockets ((server :router) (client :dealer))
         (pzmq:setsockopt server :identity server-name)
         (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "ipc://test.ipc")
-        (pzmq:bind server "ipc://test.ipc")
+        (pzmq:connect client "tcp://localhost:55555")
+        (pzmq:bind server "tcp://*:55555")
 
         (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
         (let ((res (mmop-m:pull-master-message server)))
@@ -91,8 +91,8 @@
       (pzmq:with-sockets ((server :router) (client :dealer))
         (pzmq:setsockopt server :identity server-name)
         (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "ipc://test.ipc")
-        (pzmq:bind server "ipc://test.ipc")
+        (pzmq:connect client "tcp://localhost:55555")
+        (pzmq:bind server "tcp://*:55555")
 
         (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
         (mmop-m:pull-master-message server)
@@ -113,8 +113,8 @@
       (pzmq:with-sockets ((server :router) (client :dealer))
         (pzmq:setsockopt server :identity server-name)
         (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "ipc://test.ipc")
-        (pzmq:bind server "ipc://test.ipc")
+        (pzmq:connect client "tcp://localhost:55555")
+        (pzmq:bind server "tcp://*:55555")
 
         (send-msg client *mmop-v0* (mmop-w:make-start-node-success-v0 "TEST"))
         (let ((res (mmop-m:pull-master-message server)))
@@ -129,8 +129,8 @@
       (pzmq:with-sockets ((server :router) (client :dealer))
         (pzmq:setsockopt server :identity server-name)
         (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "ipc://test.ipc")
-        (pzmq:bind server "ipc://test.ipc")
+        (pzmq:connect client "tcp://localhost:55555")
+        (pzmq:bind server "tcp://*:55555")
 
         (send-msg client *mmop-v0* (mmop-w:make-start-node-failure-v0 "TEST" "test"))
         (let ((res (mmop-m:pull-master-message server)))
@@ -138,5 +138,20 @@
           (is (mmop-m:start-node-failure-v0-client-id res) client-name)
           (is (mmop-m:start-node-failure-v0-type res) "TEST")
           (is (mmop-m:start-node-failure-v0-reason res) "test"))))))
+
+(subtest "MMOP/0 stop-worker"
+  (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+        (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
+    (pzmq:with-context nil
+      (pzmq:with-sockets ((server :router) (client :dealer))
+        (pzmq:setsockopt server :identity server-name)
+        (pzmq:setsockopt client :identity client-name)
+        (pzmq:connect client "tcp://localhost:55555")
+        (pzmq:bind server "tcp://*:55555")
+
+        (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
+        (mmop-m:pull-master-message server)
+        (send-msg server *mmop-v0* (mmop-m:make-shutdown-worker-v0 client-name))
+        (is-type (mmop-w:pull-worker-message client) 'mmop-w:shutdown-worker-v0)))))
 
 (finalize)

@@ -1,4 +1,4 @@
-image: daewok/lisp-devel
+image: ubuntu:bionic
 
 stages:
   - test
@@ -11,9 +11,9 @@ test:
     TEST_RMQ: "rabbitmq"
   before_script:
     - apt update -qy
-    - apt install -y libcurl4-openssl-dev
+    - apt install -y curl libcurl4-openssl-dev automake build-essential librabbitmq-dev libzmq3-dev libffi-dev
     - curl -L https://raw.githubusercontent.com/roswell/roswell/release/scripts/install-for-ci.sh | sh
-    - ln -s /builds/smaller_infinity/monomyth /home/lisp/.roswell/local-projects/monomyth
+    - ln -s /builds/smaller_infinity/monomyth /root/.roswell/local-projects/monomyth
   script:
     - ./bin/test.ros
   only:
