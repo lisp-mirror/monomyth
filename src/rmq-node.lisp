@@ -53,7 +53,7 @@
      ,no-error))
 
 (defun setup-connection
-    (&optional (host "localhost") (port 5672) (username "guest") (password "guest") (vhost "/"))
+    (&key (host "localhost") (port 5672) (username "guest") (password "guest") (vhost "/"))
   "builds a new connection, sets up the socket, and logs in
 defaults are the local rabbit-mq defaults"
   (rabbit-mq-call (let ((conn (new-connection)))

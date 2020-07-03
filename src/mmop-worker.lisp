@@ -7,7 +7,8 @@
            start-node-v0-type
            start-node-v0-recipe
            make-start-node-success-v0
-           make-start-node-failure-v0))
+           make-start-node-failure-v0
+           shutdown-worker-v0))
 (in-package :monomyth/mmop-worker)
 
 (defstruct (worker-ready-v0 (:constructor make-worker-ready-v0 ()))
@@ -36,6 +37,9 @@
   `(,*mmop-v0* "START-NODE-FAILURE" ,(start-node-failure-v0-type message)
                ,(start-node-failure-v0-reason message)))
 
+(defstruct (shutdown-worker-v0 (:constructor make-shutdown-worker-v0 ()))
+  "MMOP/0 stop-worker")
+
 (defun pull-worker-message (socket)
   "pulls down a message designed for the worker dealer socket and attempts to
 translate it into an equivalent struct"
@@ -52,7 +56,8 @@ translate it into an equivalent struct"
   (let ((res (trivia:match args
                ((list "START-NODE" node-type recipe)
                 (make-start-node-v0 node-type (deserialize-recipe
-                                               (babel:string-to-octets recipe)))))))
+                                               (babel:string-to-octets recipe))))
+               ((list "SHUTDOWN") (make-shutdown-worker-v0)))))
 
     (if res res
         (error 'mmop-error :version *mmop-v0* :message "unknown mmop command"))))

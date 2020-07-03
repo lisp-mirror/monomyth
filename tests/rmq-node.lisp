@@ -8,7 +8,7 @@
 (defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
 (defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
 (defparameter *fail-queue* (format nil "test-fail-~d" (get-universal-time)))
-(defparameter *conn* (let ((conn (setup-connection (uiop:getenv "TEST_RMQ"))))
+(defparameter *conn* (let ((conn (setup-connection :host (uiop:getenv "TEST_RMQ"))))
                        (if (getf conn :success)
                            (getf conn :conn)
                            (error (getf conn :error)))))

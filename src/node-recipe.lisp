@@ -1,5 +1,5 @@
 (defpackage monomyth/node-recipe
-  (:use :cl :uuid :lfarm)
+  (:use :cl :uuid)
   (:export node-recipe
            node-recipe/type
            node-recipe/transform-fn
