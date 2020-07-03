@@ -29,13 +29,15 @@
   `(,*mmop-v0* "START-NODE-SUCCESS" ,(start-node-success-v0-type message)))
 
 (defstruct (start-node-failure-v0
-            (:constructor make-start-node-failure-v0 (type reason)))
+            (:constructor make-start-node-failure-v0 (type reason-cat reason-msg)))
   "MMOP/0 start-node-failure"
   (type (error "type must be set") :read-only t)
-  (reason (error "reason must be set") :read-only t))
+  (reason-cat (error "reason-cat must be set") :read-only t)
+  (reason-msg (error "reason-msg must be set") :read-only t))
 (defmethod create-frames ((message start-node-failure-v0))
   `(,*mmop-v0* "START-NODE-FAILURE" ,(start-node-failure-v0-type message)
-               ,(start-node-failure-v0-reason message)))
+               ,(start-node-failure-v0-reason-cat message)
+               ,(start-node-failure-v0-reason-msg message)))
 
 (defstruct (shutdown-worker-v0 (:constructor make-shutdown-worker-v0 ()))
   "MMOP/0 stop-worker")

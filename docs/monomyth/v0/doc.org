@@ -105,7 +105,8 @@
      Frames:
      1. ~START-NODE-FAILURE~
      2. ~<recipe type>~
-     3. ~<reason-string>~
+     3. ~<reason-category>~
+     4. ~<reason-string>~
 
 **** Stop Worker [stop-worker]
 

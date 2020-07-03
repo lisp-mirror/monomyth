@@ -22,6 +22,7 @@
                  :initform (error "recipe transform function must be set")
                  :documentation "the function form that is passed directly to the node")
    (batch-size :reader node-recipe/batch-size
+               :initform nil
                :initarg :batch-size
                :documentation "the batch size that is passed directly to the node
 if not set uses the default"))
