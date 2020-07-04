@@ -8,17 +8,19 @@
 (defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
 (defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
 (defparameter *fail-queue* (format nil "test-fail-~d" (get-universal-time)))
-(defparameter *conn* (let ((conn (setup-connection :host (uiop:getenv "TEST_RMQ"))))
-                       (if (getf conn :success)
-                           (getf conn :conn)
-                           (error (getf conn :error)))))
 (defvar *node* (make-rmq-node nil (format nil "test-rmq-node-~d" (get-universal-time))
-                              *conn* 1 *source-queue* *dest-queue* *fail-queue*))
+                              *source-queue* *dest-queue* *fail-queue*
+                              :host (uiop:getenv "TEST_RMQ")))
+(defvar *checking-node*
+  (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
+                 *dest-queue* *source-queue* *fail-queue*
+                 :batch-size 10 :host (uiop:getenv "TEST_RMQ")))
 (startup *node* nil)
+(startup *checking-node* nil)
 
 (subtest "test-full-message-path"
   (let ((test-msg (format nil "test-~d" (get-universal-time))))
-    (ok (getf (send-message *node* *source-queue* test-msg) :success))
+    (ok (getf (send-message *checking-node* *source-queue* test-msg) :success))
     (sleep .1)
     (let* ((got-msg (get-message *node*))
            (inner-msg (getf got-msg :result)))
@@ -34,7 +36,7 @@
 
 (subtest "nack works as expected (requeue)"
   (let ((test-msg (format nil "test-~d" (get-universal-time))))
-    (ok (getf (send-message *node* *source-queue* test-msg) :success))
+    (ok (getf (send-message *checking-node* *source-queue* test-msg) :success))
     (sleep .1)
     (let* ((got-msg (get-message *node*))
            (inner-msg (getf got-msg :result)))
@@ -52,7 +54,7 @@
 
 (subtest "nack works as expected (no requeue)"
   (let ((test-msg (format nil "test-~d" (get-universal-time))))
-    (ok (getf (send-message *node* *source-queue* test-msg) :success))
+    (ok (getf (send-message *checking-node* *source-queue* test-msg) :success))
     (sleep .1)
     (let* ((got-msg (get-message *node*))
            (inner-msg (getf got-msg :result)))
@@ -67,15 +69,17 @@
       (is (getf got-msg :items) nil))))
 
 (shutdown *node*)
-(setf *node* (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
-                            (format nil "test-rmq-node-~d" (get-universal-time))
-                            *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 10))
+(setf *node*
+      (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
+                     (format nil "test-rmq-node-~d" (get-universal-time))
+                     *source-queue* *dest-queue* *fail-queue*
+                     :batch-size 10 :host (uiop:getenv "TEST_RMQ")))
 (startup *node* nil)
 
 (subtest "pull-messages-gets-full-batch"
   (iter:iterate
      (iter:repeat 10)
-     (send-message *node* *source-queue* "testing"))
+     (send-message *checking-node* *source-queue* "testing"))
 
    (sleep .1)
 
@@ -90,7 +94,7 @@
 (subtest "pull-messages-gets-partial"
   (iter:iterate
     (iter:repeat 5)
-    (send-message *node* *source-queue* "testing"))
+    (send-message *checking-node* *source-queue* "testing"))
 
   (sleep .1)
 
@@ -114,7 +118,7 @@
 
     (iter:iterate
       (iter:for item in items)
-      (send-message *node* *source-queue* item))
+      (send-message *checking-node* *source-queue* item))
 
     (sleep .1)
 
@@ -132,9 +136,11 @@
           (ack-message *node* got))))))
 
 (shutdown *node*)
-(setf *node* (make-rmq-node #'(lambda (x) (declare (ignore x)) (error "test"))
-                            (format nil "test-rmq-node-~d" (get-universal-time))
-                            *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 10))
+(setf *node*
+      (make-rmq-node #'(lambda (x) (declare (ignore x)) (error "test"))
+                     (format nil "test-rmq-node-~d" (get-universal-time))
+                     *source-queue* *dest-queue* *fail-queue*
+                     :batch-size 10 :host (uiop:getenv "TEST_RMQ")))
 (startup *node* nil)
 
 (subtest "transform-items failure"
@@ -142,7 +148,7 @@
 
     (iter:iterate
       (iter:for item in items)
-      (send-message *node* *source-queue* item))
+      (send-message *checking-node* *source-queue* item))
 
     (sleep .1)
 
@@ -161,13 +167,18 @@
           (ack-message *node* got))))))
 
 (shutdown *node*)
-(setf *node* (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
-                            (format nil "test-rmq-node-~d" (get-universal-time))
-                            *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 10))
-(startup *node* nil)
+(shutdown *checking-node*)
+(setf *node*
+      (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
+                     (format nil "test-rmq-node-~d" (get-universal-time))
+                     *source-queue* *dest-queue* *fail-queue*
+                     :batch-size 10 :host (uiop:getenv "TEST_RMQ")))
 
-(defvar *checking-node* (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
-                                       *conn* 2 *dest-queue* *source-queue* *fail-queue* :batch-size 10))
+(setf *checking-node*
+      (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
+                     *dest-queue* *source-queue* *fail-queue*
+                     :batch-size 10 :host (uiop:getenv "TEST_RMQ")))
+(startup *node* nil)
 (startup *checking-node* nil)
 
 (subtest "place items works"
@@ -175,7 +186,7 @@
 
     (iter:iterate
       (iter:for item in items)
-      (send-message *node* *source-queue* item))
+      (send-message *checking-node* *source-queue* item))
 
     (sleep .1)
 
@@ -204,7 +215,7 @@
 
     (iter:iterate
       (iter:for item in items)
-      (send-message *node* *source-queue* item))
+      (send-message *checking-node* *source-queue* item))
 
     (sleep .1)
 
@@ -225,7 +236,7 @@
 
     (iter:iterate
       (iter:for item in items)
-      (send-message *node* *source-queue* item))
+      (send-message *checking-node* *source-queue* item))
 
     (sleep .1)
 
@@ -249,8 +260,10 @@
   (is (handle-failure *node* :pull '(:error "test")) '(:error "test")))
 
 (shutdown *checking-node*)
-(setf *checking-node* (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
-                                     *conn* 2 *fail-queue* *dest-queue* *source-queue* :batch-size 10))
+(setf *checking-node*
+      (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
+                     *fail-queue* *dest-queue* *source-queue*
+                     :batch-size 10 :host (uiop:getenv "TEST_RMQ")))
 (startup *checking-node* nil)
 
 (subtest "handle-failure-transform-step-send-successful"
@@ -283,7 +296,7 @@
 (subtest "handle-failure-transform-step-send-unsuccessful"
   (iter:iterate
     (iter:for item in '("1" "2" "3" "4" "5"))
-    (send-message *node* *source-queue* item))
+    (send-message *checking-node* *source-queue* item))
 
   (sleep .1)
 
@@ -312,7 +325,7 @@
 (subtest "handle-failure-place-step-send-successful"
   (iter:iterate
     (iter:for item in '("1" "2" "3" "4" "5"))
-    (send-message *node* *source-queue* item))
+    (send-message *checking-node* *source-queue* item))
 
   (sleep .1)
 
@@ -339,7 +352,7 @@
 (subtest "handle-failure-place-step-send-unsuccessful"
   (iter:iterate
     (iter:for item in '("1" "2" "3" "4" "5"))
-    (send-message *node* *source-queue* item))
+    (send-message *checking-node* *source-queue* item))
 
   (sleep .1)
 
@@ -367,12 +380,15 @@
 
 (shutdown *node*)
 (shutdown *checking-node*)
-(setf *node* (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
-                            (format nil "test-rmq-node-~d" (get-universal-time))
-                            *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 1))
+(setf *node*
+      (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
+                     (format nil "test-rmq-node-~d" (get-universal-time))
+                     *source-queue* *dest-queue* *fail-queue*
+                     :batch-size 1 :host (uiop:getenv "TEST_RMQ")))
 (setf *checking-node*
       (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
-                     *conn* 2 *dest-queue* *source-queue* *fail-queue* :batch-size 5))
+                     *dest-queue* *source-queue* *fail-queue*
+                     :batch-size 5 :host (uiop:getenv "TEST_RMQ")))
 (startup *node* nil)
 (startup *checking-node* nil)
 
@@ -380,7 +396,7 @@
   (let ((test-items '("1" "2" "3" "4" "5")))
     (iter:iterate
       (iter:for item in test-items)
-      (send-message *node* *source-queue* item))
+      (send-message *checking-node* *source-queue* item))
 
     (sleep .1)
 
@@ -408,14 +424,15 @@
 (shutdown *checking-node*)
 (setf *checking-node*
       (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
-                     *conn* 2 *fail-queue* *source-queue* *dest-queue* :batch-size 5))
+                     *fail-queue* *source-queue* *dest-queue*
+                     :batch-size 5 :host (uiop:getenv "TEST_RMQ")))
 (startup *checking-node* nil)
 
 (subtest "full node path - transform fail"
   (let ((test-items '("1" "2" "3" "4" "5")))
     (iter:iterate
       (iter:for item in test-items)
-      (send-message *node* *source-queue* item))
+      (send-message *checking-node* *source-queue* item))
 
     (sleep .1)
 
@@ -442,7 +459,7 @@
   (let ((test-items '("1" "2" "3" "4" "5")))
     (iter:iterate
       (iter:for item in test-items)
-      (send-message *node* *source-queue* item))
+      (send-message *checking-node* *source-queue* item))
 
     (sleep .1)
 
@@ -470,11 +487,12 @@
 (defvar *second-node*
   (make-rmq-node #'(lambda (x) (format nil "test1 ~a" x))
                  (format nil "test-rmq-node-2-~d" (get-universal-time))
-                 *conn* 3 *dest-queue* *final-queue* *fail-queue*
-                 :batch-size 1))
+                 *dest-queue* *final-queue* *fail-queue*
+                 :batch-size 1 :host (uiop:getenv "TEST_RMQ")))
 (setf *checking-node*
       (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
-                     *conn* 2 *final-queue* *source-queue* *dest-queue* :batch-size 5))
+                     *final-queue* *source-queue* *dest-queue*
+                     :batch-size 5 :host (uiop:getenv "TEST_RMQ")))
 (startup *second-node* nil)
 (startup *checking-node* nil)
 
@@ -482,7 +500,7 @@
   (let ((test-items '("1" "2" "3" "4" "5")))
     (iter:iterate
       (iter:for item in test-items)
-      (send-message *node* *source-queue* item))
+      (send-message *checking-node* *source-queue* item))
 
     (sleep .1)
 
@@ -506,13 +524,14 @@
         (is (format nil "test1 test ~a" test-item) (rmq-message-body got-item))
         (ack-message *checking-node* got-item)))))
 
-(delete-queue *node* *source-queue*)
-(delete-queue *node* *dest-queue*)
-(delete-queue *node* *fail-queue*)
-(delete-queue *node* *final-queue*)
+(defvar delete-conn (setup-connection :host (uiop:getenv "TEST_RMQ")))
+(with-channel (delete-conn 1)
+  (queue-delete delete-conn 1 *source-queue*)
+  (queue-delete delete-conn 1 *dest-queue*)
+  (queue-delete delete-conn 1 *final-queue*)
+  (queue-delete delete-conn 1 *fail-queue*))
 (shutdown *node*)
 (shutdown *second-node*)
 (shutdown *checking-node*)
-(destroy-connection *conn*)
 
 (finalize)

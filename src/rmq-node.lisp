@@ -8,34 +8,30 @@
            send-message
            get-message
            ack-message
-           nack-message
-           delete-queue))
+           nack-message))
 (in-package :monomyth/rmq-node)
 
 (defparameter *get-timeout* 100)
+(defparameter *channel* 1)
 
 (defclass rmq-node (node)
   ((conn :initform (error "connection must be supplied")
          :initarg :conn
-         :reader conn
-         :documentation "the rmq connection, there should only be one per machine")
-   (channel :initarg :chan
-            :initform (error "channel number must be set")
-            :reader chan
-            :documentation "the connection channel number,
-should be distinct from all other nodes on that connection")
+         :reader rmq-node/conn
+         :documentation "the rmq connection, there should only be one per machine.
+Due to the library we are using, there will be one per node")
    (exchange :initarg :exchange
              :initform ""
-             :reader exchange)
+             :reader rmq-node/exchange)
    (source-queue :initarg :source
                  :initform (error "source queue must be set")
-                 :reader source-queue)
+                 :reader rmq-node/source-queue)
    (dest-queue :initarg :dest
                :initform (error "destination queue must be set")
-               :reader dest-queue)
+               :reader rmq-node/dest-queue)
    (fail-queue :initarg :fail
                :initform (error "failure queue must be set")
-               :reader fail-queue))
+               :reader rmq-node/fail-queue))
   (:documentation "a node type specially designed to work with rabbit mq"))
 
 (defstruct (rmq-message (:constructor build-rmq-message))
@@ -44,8 +40,9 @@ should be distinct from all other nodes on that connection")
 
 (defun build-error-response (c)
   "helper function that constructs the error plist"
-  `(:error ,(rabbitmq-library-error/error-description c)
-    :error-code ,(rabbitmq-library-error/error-code c)))
+  `(:error ,(format nil "rmq-error (~d): ~a"
+                    (rabbitmq-library-error/error-code c)
+                    (rabbitmq-library-error/error-description c))))
 
 (defmacro rabbit-mq-call (request no-error)
   "wraps a rmq call to look for a standard error"
@@ -57,15 +54,18 @@ should be distinct from all other nodes on that connection")
     (&key (host "localhost") (port 5672) (username "guest") (password "guest") (vhost "/"))
   "builds a new connection, sets up the socket, and logs in
 defaults are the local rabbit-mq defaults"
-  (rabbit-mq-call (let ((conn (new-connection)))
-                    (socket-open (tcp-socket-new conn) host port)
-                    (login-sasl-plain conn vhost username password)
-                    conn)
-                  (:no-error (conn) `(:success t :conn ,conn))))
+  (let ((conn (new-connection)))
+     (socket-open (tcp-socket-new conn) host port)
+     (login-sasl-plain conn vhost username password)
+     conn))
 
-(defun make-rmq-node (transform-fn type conn channel source-queue dest-queue fail-queue
-                      &key name exchange batch-size)
-  (let ((args `(rmq-node :transform-fn ,transform-fn :type ,type :chan ,channel :conn ,conn
+(defun make-rmq-node
+    (transform-fn type source-queue dest-queue fail-queue
+     &key (host "localhost") (port 5672) (username "guest") (password "guest") (vhost "/")
+       name exchange batch-size)
+  (let ((args `(rmq-node :transform-fn ,transform-fn :type ,type
+                         :conn ,(setup-connection :host host :port port :username username
+                                                  :password password :vhost vhost)
                          :source ,source-queue :dest ,dest-queue :fail ,fail-queue)))
     (if name (setf args (append args `(:name ,name))))
     (if batch-size (setf args (append args `(:batch-size ,batch-size))))
@@ -73,30 +73,34 @@ defaults are the local rabbit-mq defaults"
     (apply #'make-instance args)))
 
 (defmethod startup ((node rmq-node) &optional build-worker-thread)
-  "opens a channel using the nodes connection after setting up the socket.
+  "opens a channel using the nodes connections after setting up the socket.
 also ensures all three queues are up and sets up basic consume for the source queue"
   (declare (ignore build-worker-thread))
   (rabbit-mq-call
    (progn
-     (channel-open (conn node) (chan node))
-     (queue-declare (conn node) (chan node) :queue (source-queue node))
-     (queue-declare (conn node) (chan node) :queue (dest-queue node))
-     (queue-declare (conn node) (chan node) :queue (fail-queue node))
-     (basic-consume (conn node) (chan node) (source-queue node)))
+     (channel-open (rmq-node/conn node) *channel*)
+     (queue-declare (rmq-node/conn node) *channel*
+                    :queue (rmq-node/source-queue node))
+     (queue-declare (rmq-node/conn node) *channel*
+                    :queue (rmq-node/dest-queue node))
+     (queue-declare (rmq-node/conn node) *channel*
+                    :queue (rmq-node/fail-queue node))
+     (basic-consume (rmq-node/conn node) *channel*
+                    (rmq-node/source-queue node)))
    (:no-error (key) (declare (ignore key)) '(:success t))))
 
 (defmethod shutdown ((node rmq-node))
-  "closes the channel and then destroys the connection.
+  "closes the channel and then destroys the connections.
 note that this means that once an rmq-node is shutdown, it cannot be started up again"
   (rabbit-mq-call
-   (channel-close (conn node) (chan node))
+   (destroy-connection (rmq-node/conn node))
    (:no-error (res) (declare (ignore res)) '(:success t))))
 
 (defun send-message (node queue message)
   "sends a message to the specified queue"
   (rabbit-mq-call
-   (basic-publish (conn node) (chan node)
-                  :exchange (exchange node)
+   (basic-publish (rmq-node/conn node) *channel*
+                  :exchange (rmq-node/exchange node)
                   :routing-key queue
                   :body message)
    (:no-error (res) (if (eq res :amqp-status-ok) '(:success t) `(:error res)))))
@@ -106,7 +110,7 @@ note that this means that once an rmq-node is shutdown, it cannot be started up 
 (as opposed to a byte array)
 return :success t with the :result if things go well"
   (handler-case
-      (let ((msg (consume-message (conn node) :timeout *get-timeout*)))
+      (let ((msg (consume-message (rmq-node/conn node) :timeout *get-timeout*)))
         (build-rmq-message
          :body (babel:octets-to-string (message/body (envelope/message msg)) :encoding :utf-8)
          :delivery-tag (envelope/delivery-tag msg)))
@@ -119,20 +123,16 @@ return :success t with the :result if things go well"
 (defun ack-message (node message)
   "acks a message as complete"
   (rabbit-mq-call
-   (basic-ack (conn node) (chan node) (rmq-message-delivery-tag message))
+   (basic-ack (rmq-node/conn node) *channel*
+              (rmq-message-delivery-tag message))
    (:no-error (res) (declare (ignore res)) '(:success t))))
 
 (defun nack-message (node message requeue)
   "nacks a message as incomplete, re-queues message if asked to"
   (rabbit-mq-call
-   (basic-nack (conn node) (chan node) (rmq-message-delivery-tag message) :requeue requeue)
+   (basic-nack (rmq-node/conn node) *channel*
+               (rmq-message-delivery-tag message) :requeue requeue)
    (:no-error (res) (if (eq res :amqp-status-ok) '(:success t) `(:error ,res)))))
-
-(defun delete-queue (node queue)
-  "uses the node to delete a queue, exists for testing purposes"
-  (rabbit-mq-call
-   (queue-delete (conn node) (chan node) queue)
-   (:no-error (res) (declare (ignore res)) '(:success t))))
 
 (defmethod pull-items ((node rmq-node))
   `(:success t
@@ -158,7 +158,7 @@ return :success t with the :result if things go well"
 (defmethod place-items ((node rmq-node) result)
   (iter:iterate
     (iter:for item in (getf result :items))
-    (let ((send-res (send-message node (dest-queue node) (rmq-message-body item))))
+    (let ((send-res (send-message node (rmq-node/dest-queue node) (rmq-message-body item))))
       (if (getf send-res :success)
           (let ((ack-res (ack-message node item)))
             (if (not (getf ack-res :success))
@@ -170,7 +170,7 @@ return :success t with the :result if things go well"
   (flet ((place-messages ()
            (iter:iterate
              (iter:for item in (getf result :items))
-             (let ((send-res (send-message node (fail-queue node)
+             (let ((send-res (send-message node (rmq-node/fail-queue node)
                                            (rmq-message-body item))))
                (if (getf send-res :success)
                    (nack-message node item nil)
