@@ -128,6 +128,7 @@ return :success t with the :result if things go well"
 
 (defmethod pull-items ((node rmq-node))
   (iter:iterate
+    (iter:finally (return items))
     (iter:repeat (node/batch-size node))
     (handler-case (iter:collect (get-message node) into items)
       (rabbitmq-library-error (c)
@@ -139,10 +140,12 @@ return :success t with the :result if things go well"
 (defmethod transform-items ((node rmq-node) pulled)
   (handler-case
       (iter:iterate
+        (iter:finally (return items))
         (iter:for item in pulled)
         (iter:collect (build-rmq-message
                        :body (funcall (node/trans-fn node) (rmq-message-body item))
-                       :delivery-tag (rmq-message-delivery-tag item))))
+                       :delivery-tag (rmq-message-delivery-tag item))
+          into items))
     (error (c)
       (error 'node-error :step :transform :items pulled
                          :message (format nil "~a" c)))

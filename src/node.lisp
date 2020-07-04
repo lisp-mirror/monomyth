@@ -11,7 +11,9 @@
            node/node-name
            node/trans-fn
            node/batch-size
-           node-error))
+           node-error
+           node-error/step
+           node-error/items))
 (in-package :monomyth/node)
 
 (defgeneric startup (node &optional build-worker-thread)
