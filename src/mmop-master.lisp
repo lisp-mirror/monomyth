@@ -11,7 +11,8 @@
            start-node-failure-v0
            start-node-failure-v0-client-id
            start-node-failure-v0-type
-           start-node-failure-v0-reason
+           start-node-failure-v0-reason-cat
+           start-node-failure-v0-reason-msg
            make-shutdown-worker-v0))
 (in-package :monomyth/mmop-master)
 
@@ -36,11 +37,13 @@
   (type (error "type must be set") :read-only t))
 
 (defstruct (start-node-failure-v0
-            (:constructor make-start-node-failure-v0 (client-id type reason)))
+            (:constructor make-start-node-failure-v0
+                (client-id type reason-cat reason-msg)))
   "MMOP/0 start-node-failure"
   (client-id (error "client id must be set") :read-only t)
   (type (error "type must be set") :read-only t)
-  (reason (error "reason must be set") :read-only t))
+  (reason-cat (error "reason must be set") :read-only t)
+  (reason-msg (error "reason must be set") :read-only t))
 
 (defstruct (shutdown-worker-v0
             (:constructor make-shutdown-worker-v0 (client-id)))
@@ -66,8 +69,8 @@ translate it into an equivalent struct"
                ((list "READY") (make-worker-ready-v0 id))
                ((list "START-NODE-SUCCESS" node-type)
                 (make-start-node-success-v0 id node-type))
-               ((list "START-NODE-FAILURE" node-type reason)
-                (make-start-node-failure-v0 id node-type reason)))))
+               ((list "START-NODE-FAILURE" node-type cat msg)
+                (make-start-node-failure-v0 id node-type cat msg)))))
 
     (if res res
         (error 'mmop-error :version *mmop-v0* :message "unknown mmop command"))))

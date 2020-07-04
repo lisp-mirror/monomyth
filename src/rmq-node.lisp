@@ -22,7 +22,8 @@
    (channel :initarg :chan
             :initform (error "channel number must be set")
             :reader chan
-            :documentation "the connection channel number, should be distinct from all other nodes")
+            :documentation "the connection channel number,
+should be distinct from all other nodes on that connection")
    (exchange :initarg :exchange
              :initform ""
              :reader exchange)
@@ -62,18 +63,19 @@ defaults are the local rabbit-mq defaults"
                     conn)
                   (:no-error (conn) `(:success t :conn ,conn))))
 
-(defun make-rmq-node (transform-fn name conn channel source-queue dest-queue fail-queue
-                      &key exchange batch-size)
-  (let ((args `(rmq-node :transform-fn ,transform-fn :name ,name :chan ,channel :conn ,conn
+(defun make-rmq-node (transform-fn type conn channel source-queue dest-queue fail-queue
+                      &key name exchange batch-size)
+  (let ((args `(rmq-node :transform-fn ,transform-fn :type ,type :chan ,channel :conn ,conn
                          :source ,source-queue :dest ,dest-queue :fail ,fail-queue)))
+    (if name (setf args (append args `(:name ,name))))
     (if batch-size (setf args (append args `(:batch-size ,batch-size))))
     (if exchange (setf args (append args `(:exchange ,exchange))))
     (apply #'make-instance args)))
 
-(defmethod startup ((node rmq-node))
+(defmethod startup ((node rmq-node) &optional build-worker-thread)
   "opens a channel using the nodes connection after setting up the socket.
 also ensures all three queues are up and sets up basic consume for the source queue"
-  (vom:info "starting rmq-node ~a" (node/node-name node))
+  (declare (ignore build-worker-thread))
   (rabbit-mq-call
    (progn
      (channel-open (conn node) (chan node))
@@ -86,7 +88,6 @@ also ensures all three queues are up and sets up basic consume for the source qu
 (defmethod shutdown ((node rmq-node))
   "closes the channel and then destroys the connection.
 note that this means that once an rmq-node is shutdown, it cannot be started up again"
-  (vom:info "shutting down rmq-node ~a" (node/node-name node))
   (rabbit-mq-call
    (channel-close (conn node) (chan node))
    (:no-error (res) (declare (ignore res)) '(:success t))))

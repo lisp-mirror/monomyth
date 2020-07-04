@@ -21,5 +21,16 @@
         (make-instance 'rmq-worker :conn (getf conn :conn))
         (error (getf conn :error)))))
 
+(defmethod build-node ((worker rmq-worker) (recipe rmq-node-recipe))
+  (make-rmq-node (eval (read-from-string (node-recipe/transform-fn recipe)))
+                 (node-recipe/type recipe)
+                 (rmq-worker/conn worker)
+                 (incf (rmq-worker/chan-counter worker))
+                 (rmq-node-recipe/source-queue recipe)
+                 (rmq-node-recipe/dest-queue recipe)
+                 (name-fail-queue recipe)
+                 :batch-size (node-recipe/batch-size recipe)))
+
 (defmethod stop-worker :after ((worker rmq-worker))
+  (sleep .1)
   (destroy-connection (rmq-worker/conn worker)))

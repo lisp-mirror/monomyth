@@ -14,7 +14,7 @@
                            (error (getf conn :error)))))
 (defvar *node* (make-rmq-node nil (format nil "test-rmq-node-~d" (get-universal-time))
                               *conn* 1 *source-queue* *dest-queue* *fail-queue*))
-(startup *node*)
+(startup *node* nil)
 
 (subtest "test-full-message-path"
   (let ((test-msg (format nil "test-~d" (get-universal-time))))
@@ -70,7 +70,7 @@
 (setf *node* (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
                             (format nil "test-rmq-node-~d" (get-universal-time))
                             *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 10))
-(startup *node*)
+(startup *node* nil)
 
 (subtest "pull-messages-gets-full-batch"
   (iter:iterate
@@ -135,7 +135,7 @@
 (setf *node* (make-rmq-node #'(lambda (x) (declare (ignore x)) (error "test"))
                             (format nil "test-rmq-node-~d" (get-universal-time))
                             *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 10))
-(startup *node*)
+(startup *node* nil)
 
 (subtest "transform-items failure"
   (let ((items `("1" "2" "3" "4" "5" "6" "7" "8" "9" "10")))
@@ -164,11 +164,11 @@
 (setf *node* (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
                             (format nil "test-rmq-node-~d" (get-universal-time))
                             *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 10))
-(startup *node*)
+(startup *node* nil)
 
 (defvar *checking-node* (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
                                        *conn* 2 *dest-queue* *source-queue* *fail-queue* :batch-size 10))
-(startup *checking-node*)
+(startup *checking-node* nil)
 
 (subtest "place items works"
   (let ((items `("1" "2" "3" "4" "5" "6" "7" "8" "9" "10")))
@@ -251,7 +251,7 @@
 (shutdown *checking-node*)
 (setf *checking-node* (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
                                      *conn* 2 *fail-queue* *dest-queue* *source-queue* :batch-size 10))
-(startup *checking-node*)
+(startup *checking-node* nil)
 
 (subtest "handle-failure-transform-step-send-successful"
   (iter:iterate
@@ -372,8 +372,8 @@
                             *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 1))
 (setf *checking-node* (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
                                      *conn* 2 *dest-queue* *source-queue* *fail-queue* :batch-size 5))
-(startup *node*)
-(startup *checking-node*)
+(startup *node* nil)
+(startup *checking-node* nil)
 
 (subtest "full node path - success"
   (let ((test-items '("1" "2" "3" "4" "5")))
@@ -407,7 +407,7 @@
 (shutdown *checking-node*)
 (setf *checking-node* (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
                                      *conn* 2 *fail-queue* *source-queue* *dest-queue* :batch-size 5))
-(startup *checking-node*)
+(startup *checking-node* nil)
 
 (subtest "full node path - transform fail"
   (let ((test-items '("1" "2" "3" "4" "5")))

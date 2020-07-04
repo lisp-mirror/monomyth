@@ -132,12 +132,14 @@
         (pzmq:connect client "tcp://localhost:55555")
         (pzmq:bind server "tcp://*:55555")
 
-        (send-msg client *mmop-v0* (mmop-w:make-start-node-failure-v0 "TEST" "test"))
+        (send-msg client *mmop-v0* (mmop-w:make-start-node-failure-v0
+                                    "TEST" "test" "test-msg"))
         (let ((res (mmop-m:pull-master-message server)))
           (is-type res 'mmop-m:start-node-failure-v0)
           (is (mmop-m:start-node-failure-v0-client-id res) client-name)
           (is (mmop-m:start-node-failure-v0-type res) "TEST")
-          (is (mmop-m:start-node-failure-v0-reason res) "test"))))))
+          (is (mmop-m:start-node-failure-v0-reason-cat res) "test")
+          (is (mmop-m:start-node-failure-v0-reason-msg res) "test-msg"))))))
 
 (subtest "MMOP/0 stop-worker"
   (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
