@@ -510,8 +510,7 @@
       (ok (getf (run-iteration *node*) :success)
           (format nil "first iter: ~d" i))
       (ok (getf (run-iteration *second-node*) :success)
-          (format nil "second iter: ~d" i))
-      (sleep .1))
+          (format nil "second iter: ~d" i)))
 
     (sleep .1)
 
@@ -530,6 +529,7 @@
   (queue-delete delete-conn 1 *dest-queue*)
   (queue-delete delete-conn 1 *final-queue*)
   (queue-delete delete-conn 1 *fail-queue*))
+(destroy-connection delete-conn)
 (shutdown *node*)
 (shutdown *second-node*)
 (shutdown *checking-node*)
