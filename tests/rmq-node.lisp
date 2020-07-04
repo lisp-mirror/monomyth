@@ -370,8 +370,9 @@
 (setf *node* (make-rmq-node #'(lambda (x) (format nil "test ~a" x))
                             (format nil "test-rmq-node-~d" (get-universal-time))
                             *conn* 1 *source-queue* *dest-queue* *fail-queue* :batch-size 1))
-(setf *checking-node* (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
-                                     *conn* 2 *dest-queue* *source-queue* *fail-queue* :batch-size 5))
+(setf *checking-node*
+      (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
+                     *conn* 2 *dest-queue* *source-queue* *fail-queue* :batch-size 5))
 (startup *node* nil)
 (startup *checking-node* nil)
 
@@ -405,8 +406,9 @@
       (is (run-iteration *node*) res))))
 
 (shutdown *checking-node*)
-(setf *checking-node* (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
-                                     *conn* 2 *fail-queue* *source-queue* *dest-queue* :batch-size 5))
+(setf *checking-node*
+      (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
+                     *conn* 2 *fail-queue* *source-queue* *dest-queue* :batch-size 5))
 (startup *checking-node* nil)
 
 (subtest "full node path - transform fail"
@@ -463,10 +465,53 @@
         (is (format nil "test ~a" test-item) (rmq-message-body got-item))
         (ack-message *checking-node* got-item)))))
 
+(shutdown *checking-node*)
+(defparameter *final-queue* (format nil "test-final-~d" (get-universal-time)))
+(defvar *second-node*
+  (make-rmq-node #'(lambda (x) (format nil "test1 ~a" x))
+                 (format nil "test-rmq-node-2-~d" (get-universal-time))
+                 *conn* 3 *dest-queue* *final-queue* *fail-queue*
+                 :batch-size 1))
+(setf *checking-node*
+      (make-rmq-node nil (format nil "test-rmq-node-1-~d" (get-universal-time))
+                     *conn* 2 *final-queue* *source-queue* *dest-queue* :batch-size 5))
+(startup *second-node* nil)
+(startup *checking-node* nil)
+
+(subtest "full node path - success - two nodes"
+  (let ((test-items '("1" "2" "3" "4" "5")))
+    (iter:iterate
+      (iter:for item in test-items)
+      (send-message *node* *source-queue* item))
+
+    (sleep .1)
+
+    (iter:iterate
+      (iter:repeat 5)
+      (iter:for i upfrom 0)
+      (ok (getf (run-iteration *node*) :success)
+          (format nil "first iter: ~d" i))
+      (ok (getf (run-iteration *second-node*) :success)
+          (format nil "second iter: ~d" i))
+      (sleep .1))
+
+    (sleep .1)
+
+    (let* ((got-items (pull-items *checking-node*))
+           (inner-got-items (getf got-items :items)))
+      (ok (getf got-items :success) "got items for check")
+      (iter:iterate
+        (iter:for test-item in test-items)
+        (iter:for got-item in inner-got-items)
+        (is (format nil "test1 test ~a" test-item) (rmq-message-body got-item))
+        (ack-message *checking-node* got-item)))))
+
 (delete-queue *node* *source-queue*)
 (delete-queue *node* *dest-queue*)
 (delete-queue *node* *fail-queue*)
+(delete-queue *node* *final-queue*)
 (shutdown *node*)
+(shutdown *second-node*)
 (shutdown *checking-node*)
 (destroy-connection *conn*)
 
