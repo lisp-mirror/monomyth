@@ -5,32 +5,35 @@
 (in-package :monomyth/rmq-worker)
 
 (defclass rmq-worker (worker)
-  ((conn :reader rmq-worker/conn
-         :initarg :conn
-         :documentation "the rmq connection for the machine")
-   (chan-counter :initform 0
-                 :accessor rmq-worker/chan-counter
-                 :documentation "a counter to ensure that each node has a unique channel"))
+  ((host :reader rmq-worker/host
+         :initarg :host
+         :initform (error "rmq host must be set")
+         :documentation "rabbit mq host")
+   (port :reader rmq-worker/port
+         :initarg :port
+         :initform (error "rmq port must be set")
+         :documentation "rabbit mq port")
+   (username :reader rmq-worker/username
+             :initarg :username
+             :initform (error "rmq username must be set")
+             :documentation "rabbit mq username")
+   (password :reader rmq-worker/password
+             :initarg :password
+             :initform (error "rmq password")))
   (:documentation "a worker designed to work directly with rabbit mq nodes"))
 
 (defun build-rmq-worker
     (&key (host "localhost") (port 5672) (username "guest") (password "guest"))
-  (let ((conn (setup-connection :host host :port port :username username
-                                :password password)))
-    (if (getf conn :success)
-        (make-instance 'rmq-worker :conn (getf conn :conn))
-        (error (getf conn :error)))))
+  (make-instance 'rmq-worker :host host :port port :username username :password password))
 
 (defmethod build-node ((worker rmq-worker) (recipe rmq-node-recipe))
   (make-rmq-node (eval (read-from-string (node-recipe/transform-fn recipe)))
                  (node-recipe/type recipe)
-                 (rmq-worker/conn worker)
-                 (incf (rmq-worker/chan-counter worker))
                  (rmq-node-recipe/source-queue recipe)
                  (rmq-node-recipe/dest-queue recipe)
                  (name-fail-queue recipe)
+                 :host (rmq-worker/host worker)
+                 :port (rmq-worker/port worker)
+                 :username (rmq-worker/username worker)
+                 :password (rmq-worker/password worker)
                  :batch-size (node-recipe/batch-size recipe)))
-
-(defmethod stop-worker :after ((worker rmq-worker))
-  (sleep .1)
-  (destroy-connection (rmq-worker/conn worker)))

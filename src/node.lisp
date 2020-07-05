@@ -10,7 +10,10 @@
            node
            node/node-name
            node/trans-fn
-           node/batch-size))
+           node/batch-size
+           node-error
+           node-error/step
+           node-error/items))
 (in-package :monomyth/node)
 
 (defgeneric startup (node &optional build-worker-thread)
@@ -67,32 +70,41 @@ should return a plist with one of the slots as :success and the new items under 
                   :documentation "thread the iteration loop runs on"))
   (:documentation "base node class for the monomyth flow system"))
 
+(define-condition node-error (error)
+  ((step :reader node-error/step
+         :initarg :step
+         :initform (error "node error step must be set")
+         :documentation "the step the node failed on
+should be :place, :transform, or :pull if handle failure will take it")
+   (message :reader node-error/message
+            :initarg :message
+            :initform (error "node error message must be set"))
+   (items :reader node-error/items
+          :initarg :items
+          :initform nil
+          :documentation "the items to be reprocessed"))
+  (:documentation "an internal node error, handled by run-iteration")
+  (:report (lambda (con stream)
+             (format stream "internal node error: ~a" (node-error/message con)))))
+
 (defmethod transform-items ((node node) pulled)
   (handler-case
       (iter:iterate
-        (iter:for item in (getf pulled :items))
+        (iter:for item in pulled)
         (iter:collect (funcall (node/trans-fn node) item)))
     (error (c)
-      (vom:error "unexpected error in transformation ~a" c)
-      `(:error ,c :items ,(getf pulled :items)))
-    (:no-error (res) `(:success t :items ,res))))
+      (error 'node-error :step :transform :items pulled
+             :message (format nil "~a" c)))
+    (:no-error (res) res)))
 
 (defmethod run-iteration ((node node))
   (handler-case
-      (let ((pull-result (pull-items node)))
-        (if (getf pull-result :success)
-            (let ((trans-result (transform-items node pull-result)))
-              (if (getf trans-result :success)
-                  (let ((place-result (place-items node trans-result)))
-                    (if (getf place-result :success)
-                        '(:success t)
-                        (handle-failure node :place place-result)))
-                  (handle-failure node :transform trans-result)))
-            (handle-failure node :pull pull-result)))
-    (error (c)
-      (vom:error "node ~a had an unexpected error ~a" (node/node-name node) c)
-      `(:error ,c))
-    (:no-error (res) res)))
+      (place-items node (transform-items node (pull-items node)))
+    (node-error (c)
+      (let ((step (node-error/step c))
+            (msg (node-error/message c)))
+        (vom:error "unexpected node error in ~a: ~a" step msg)
+        (handle-failure node step (node-error/items c))))))
 
 (defmethod startup :after ((node node) &optional (build-worker-thread t))
   (when build-worker-thread

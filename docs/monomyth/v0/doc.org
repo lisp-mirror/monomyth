@@ -28,8 +28,7 @@
 
   The nodes are started and stopped by a worker server.
   The server takes no other action other than this, nodes cannot by altered.
-  It is assumed that there is a one to one ratio between servers and workers
-  (this assumption simplifies connection management when it comes to the data stream).
+  It is assumed that there is a one to one ratio between servers and workers.
 
   Workers are controlled by a single master server.
   The master and workers communicate via the Monomyth Orchestration Protocol (MMOP).

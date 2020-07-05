@@ -1,6 +1,6 @@
 (defpackage monomyth/tests/rmq-worker
   (:use :cl :prove :cl-rabbit :monomyth/rmq-worker :monomyth/worker :monomyth/mmop
-        :monomyth/rmq-node-recipe :monomyth/rmq-node))
+        :monomyth/rmq-node-recipe :monomyth/rmq-node :monomyth/node))
 (in-package :monomyth/tests/rmq-worker)
 
 (defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
@@ -16,6 +16,7 @@
            (pzmq:bind master "tcp://*:55555")
            (let ((msg (mmop-m:pull-master-message master)))
              (is-type msg 'mmop-m:worker-ready-v0)
+             (sleep .1)
              (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0
                                          (mmop-m:worker-ready-v0-client-id msg))))))))
   (let ((wrkr (build-rmq-worker :host *rmq-host*)))
@@ -77,19 +78,20 @@
 
 (skip 1 "worker catches bad recipe type")
 
+(defparameter *test-process-time* 5)
+
 (subtest "worker processes data - single node"
   (let ((recipe1 (build-rmq-node-recipe :test "#'(lambda (x) (format nil \"test ~a\" x))"
                                         *source-queue* *dest-queue* 5))
-        (conn (let ((conn (setup-connection :host (uiop:getenv "TEST_RMQ"))))
-                (if (getf conn :success)
-                    (getf conn :conn)
-                    (error (getf conn :error)))))
+        (work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
+                                  *source-queue* *dest-queue* *dest-queue*
+                                  :host *rmq-host*))
         (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
-    (with-channel (conn 1)
-      (iter:iterate
-        (iter:for item in items)
-        (basic-publish conn 1 :routing-key *source-queue* :body item)))
-    (destroy-connection conn)
+    (startup work-node nil)
+    (iter:iterate
+      (iter:for item in items)
+      (send-message work-node *source-queue* item))
+    (shutdown work-node)
     (bt:make-thread
      #'(lambda ()
          (pzmq:with-context nil
@@ -102,7 +104,7 @@
                (let ((res-msg (mmop-m:pull-master-message master)))
                  (is-type res-msg 'mmop-m:start-node-success-v0)
                  (is (mmop-m:start-node-success-v0-type res-msg) "TEST"))
-               (sleep 1)
+               (sleep *test-process-time*)
                (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0 id)))))))
     (let ((wrkr (build-rmq-worker :host *rmq-host*)))
       (start-worker wrkr "tcp://localhost:55555")
@@ -110,27 +112,84 @@
       (stop-worker wrkr)
       (pass "worker stopped"))
 
-    (setf conn (let ((conn (setup-connection :host (uiop:getenv "TEST_RMQ"))))
-                 (if (getf conn :success)
-                     (getf conn :conn)
-                     (error (getf conn :error)))))
-    (with-channel (conn 1)
-      (basic-consume conn 1 *dest-queue*)
-      (iter:iterate
-        (iter:for item in items)
-        (iter:for got = (consume-message conn))
-        (is (babel:octets-to-string (message/body (envelope/message got)))
-            (format nil "test ~a" item))
-        (basic-ack conn 1 (envelope/delivery-tag got))))))
+    (setf work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
+                                   *dest-queue* *dest-queue* *dest-queue*
+                                   :host *rmq-host*))
+    (startup work-node nil)
+    (iter:iterate
+      (iter:for item in items)
+      (iter:for got = (get-message work-node))
+      (is (rmq-message-body got) (format nil "test ~a" item))
+      (ack-message work-node got))
+    (shutdown work-node)))
 
-(defparameter *conn* (let ((conn (setup-connection :host (uiop:getenv "TEST_RMQ"))))
-                       (if (getf conn :success)
-                           (getf conn :conn)
-                           (error (getf conn :error)))))
+(defparameter queue-1 (format nil "process-test-~a-1" (get-universal-time)))
+(defparameter queue-2 (format nil "process-test-~a-2" (get-universal-time)))
+(defparameter queue-3 (format nil "process-test-~a-3" (get-universal-time)))
+(defparameter queue-4 (format nil "process-test-~a-4" (get-universal-time)))
+
+(subtest "worker processes data - multiple nodes"
+  (let ((recipe1 (build-rmq-node-recipe :test1 "#'(lambda (x) (format nil \"test1 ~a\" x))"
+                                        queue-1 queue-2 5))
+        (recipe2 (build-rmq-node-recipe :test2 "#'(lambda (x) (format nil \"test2 ~a\" x))"
+                                        queue-2 queue-3))
+        (recipe3 (build-rmq-node-recipe :test3 "#'(lambda (x) (format nil \"test3 ~a\" x))"
+                                        queue-3 queue-4 4))
+        (work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
+                                  queue-1 queue-2 queue-3 :host *rmq-host*))
+        (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
+    (startup work-node nil)
+    (iter:iterate
+      (iter:for item in items)
+      (send-message work-node queue-1 item))
+    (shutdown work-node)
+    (bt:make-thread
+     #'(lambda ()
+         (pzmq:with-context nil
+           (pzmq:with-socket master :router
+             (pzmq:bind master "tcp://*:55555")
+             (let* ((msg (mmop-m:pull-master-message master))
+                    (id (mmop-m:worker-ready-v0-client-id msg)))
+               (is-type msg 'mmop-m:worker-ready-v0)
+               (send-msg master *mmop-v0* (mmop-m:make-start-node-v0 id recipe1))
+               (let ((res-msg1 (mmop-m:pull-master-message master)))
+                 (is-type res-msg1 'mmop-m:start-node-success-v0)
+                 (is (mmop-m:start-node-success-v0-type res-msg1) "TEST1"))
+               (send-msg master *mmop-v0* (mmop-m:make-start-node-v0 id recipe2))
+               (let ((res-msg2 (mmop-m:pull-master-message master)))
+                 (is-type res-msg2 'mmop-m:start-node-success-v0)
+                 (is (mmop-m:start-node-success-v0-type res-msg2) "TEST2"))
+               (send-msg master *mmop-v0* (mmop-m:make-start-node-v0 id recipe3))
+               (let ((res-msg3 (mmop-m:pull-master-message master)))
+                 (is-type res-msg3 'mmop-m:start-node-success-v0)
+                 (is (mmop-m:start-node-success-v0-type res-msg3) "TEST3"))
+               (sleep *test-process-time*)
+               (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0 id)))))))
+    (let ((wrkr (build-rmq-worker :host *rmq-host*)))
+      (start-worker wrkr "tcp://localhost:55555")
+      (run-worker wrkr)
+      (stop-worker wrkr)
+      (pass "worker stopped"))
+
+    (setf work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
+                                   queue-4 queue-4 queue-4 :host *rmq-host*))
+    (startup work-node nil)
+    (iter:iterate
+      (iter:for item in items)
+      (iter:for got = (get-message work-node))
+      (is (rmq-message-body got) (format nil "test3 test2 test1 ~a" item))
+      (ack-message work-node got))
+    (shutdown work-node)))
+
+(defparameter *conn* (setup-connection :host (uiop:getenv "TEST_RMQ")))
 (with-channel (*conn* 1)
   (queue-delete *conn* 1 *source-queue*)
   (queue-delete *conn* 1 *dest-queue*)
-  (queue-delete *conn* 1 "TEST-fail"))
+  (queue-delete *conn* 1 "TEST-fail")
+  (queue-delete *conn* 1 queue-1)
+  (queue-delete *conn* 1 queue-2)
+  (queue-delete *conn* 1 queue-3)
+  (queue-delete *conn* 1 queue-4))
 (destroy-connection *conn*)
 
 (finalize)
