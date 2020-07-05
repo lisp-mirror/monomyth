@@ -16,6 +16,7 @@
            (pzmq:bind master "tcp://*:55555")
            (let ((msg (mmop-m:pull-master-message master)))
              (is-type msg 'mmop-m:worker-ready-v0)
+             (sleep .1)
              (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0
                                          (mmop-m:worker-ready-v0-client-id msg))))))))
   (let ((wrkr (build-rmq-worker :host *rmq-host*)))
