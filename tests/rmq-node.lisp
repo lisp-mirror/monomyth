@@ -116,11 +116,18 @@
       (send-message *checking-node* *source-queue* item))
     (sleep .1)
 
-    (handler-case (transform-items *node* (pull-items *node*))
-      (node-error (c)
-        (is (node-error/step c) :transform)
-        (is (node-error/items c) nil))
-      (:no-error (res) (declare (ignore res)) (fail "transform should not have succeeded")))))
+    (let ((got-items (pull-items *node*)))
+      (handler-case (transform-items *node* got-items)
+        (node-error (c)
+          (is (node-error/step c) :transform)
+          (is (length (node-error/items c)) (length items))
+          (iter:iterate
+            (iter:for expected in items)
+            (iter:for got in (node-error/items c))
+            (is (rmq-message-body got) expected)
+            (ack-message *node* got)))
+        (:no-error (res) (declare (ignore res))
+          (fail "transform should not have succeeded"))))))
 
 (shutdown *node*)
 (shutdown *checking-node*)
@@ -156,7 +163,6 @@
           (iter:for got-second in second-got-items)
           (is expected (rmq-message-body got-first))
           (is expected (rmq-message-body got-second))
-          (ack-message *node* got-first)
           (ack-message *checking-node* got-second))))))
 
 (skip 1 "place items handles put failure")
@@ -255,29 +261,20 @@
     (iter:iterate
       (iter:for item in test-items)
       (send-message *checking-node* *source-queue* item))
-
     (sleep .1)
 
     (iter:iterate
       (iter:repeat 5)
-      (ok (getf (run-iteration *node*) :success)))
-
+      (run-iteration *node*))
     (sleep .1)
 
-    (let* ((got-items (pull-items *checking-node*))
-           (inner-got-items (getf got-items :items)))
-      (ok (getf got-items :success))
+    (let* ((got-items (pull-items *checking-node*)))
+      (is (length test-items) (length got-items))
       (iter:iterate
         (iter:for test-item in test-items)
-        (iter:for got-item in inner-got-items)
+        (iter:for got-item in got-items)
         (is (format nil "test ~a" test-item) (rmq-message-body got-item))
         (ack-message *checking-node* got-item)))))
-
-(subtest "full node path - pull fail"
-  (let ((res '(:error "test")))
-    (with-mocks ()
-      (answer pull-items res)
-      (is (run-iteration *node*) res))))
 
 (shutdown *checking-node*)
 (setf *checking-node*
@@ -286,30 +283,36 @@
                      :batch-size 5 :host (uiop:getenv "TEST_RMQ")))
 (startup *checking-node* nil)
 
+(subtest "full node path - pull fail"
+  (iter:iterate
+    (iter:repeat 5)
+    (with-mocks ()
+      (answer (pull-items _)
+        (error 'node-error :message "test" :step :pull))
+      (run-iteration *node*)))
+
+  (is (pull-items *checking-node*) nil))
+
 (subtest "full node path - transform fail"
   (let ((test-items '("1" "2" "3" "4" "5")))
     (iter:iterate
       (iter:for item in test-items)
       (send-message *checking-node* *source-queue* item))
-
     (sleep .1)
 
     (iter:iterate
       (iter:repeat 5)
       (with-mocks ()
         (answer (transform-items _ items)
-          `(:error "test" :items ,(getf items :items)))
-        (ok (not (getf (run-iteration *node*) :success)))))
-
+          (error 'node-error :message "test" :items items :step :transform))
+        (run-iteration *node*)))
     (sleep .1)
 
-    (let* ((got-items (pull-items *checking-node*))
-           (inner-got-items (getf got-items :items)))
-      (ok (getf got-items :success))
-      (is (length inner-got-items) (length test-items))
+    (let ((got-items (pull-items *checking-node*)))
+      (is (length got-items) (length test-items))
       (iter:iterate
         (iter:for test-item in test-items)
-        (iter:for got-item in inner-got-items)
+        (iter:for got-item in got-items)
         (is test-item (rmq-message-body got-item))
         (ack-message *checking-node* got-item)))))
 
@@ -318,25 +321,21 @@
     (iter:iterate
       (iter:for item in test-items)
       (send-message *checking-node* *source-queue* item))
-
     (sleep .1)
 
     (iter:iterate
       (iter:repeat 5)
       (with-mocks ()
         (answer (place-items _ items)
-          `(:error "test" :items ,(getf items :items)))
-        (ok (not (getf (run-iteration *node*) :success)))))
-
+          (error 'node-error :message "test" :items items :step :place))
+        (run-iteration *node*)))
     (sleep .1)
 
-    (let* ((got-items (pull-items *checking-node*))
-           (inner-got-items (getf got-items :items)))
-      (ok (getf got-items :success))
-      (is (length inner-got-items) (length test-items))
+    (let ((got-items (pull-items *checking-node*)))
+      (is (length got-items) (length test-items))
       (iter:iterate
         (iter:for test-item in test-items)
-        (iter:for got-item in inner-got-items)
+        (iter:for got-item in got-items)
         (is (format nil "test ~a" test-item) (rmq-message-body got-item))
         (ack-message *checking-node* got-item)))))
 
@@ -359,25 +358,23 @@
     (iter:iterate
       (iter:for item in test-items)
       (send-message *checking-node* *source-queue* item))
-
     (sleep .1)
 
     (iter:iterate
       (iter:repeat 5)
       (iter:for i upfrom 0)
-      (ok (getf (run-iteration *node*) :success)
-          (format nil "first iter: ~d" i))
+      (run-iteration *node*)
+      (diag (format nil "first iter: ~d" i))
       (sleep .1)
-      (ok (getf (run-iteration *second-node*) :success)
-          (format nil "second iter: ~d" i))
+      (run-iteration *second-node*)
+      (diag (format nil "second iter: ~d" i))
       (sleep .1))
 
-    (let* ((got-items (pull-items *checking-node*))
-           (inner-got-items (getf got-items :items)))
-      (ok (getf got-items :success) "got items for check")
+    (let ((got-items (pull-items *checking-node*)))
+      (is (length got-items) (length test-items))
       (iter:iterate
         (iter:for test-item in test-items)
-        (iter:for got-item in inner-got-items)
+        (iter:for got-item in got-items)
         (is (format nil "test1 test ~a" test-item) (rmq-message-body got-item))
         (ack-message *checking-node* got-item)))))
 

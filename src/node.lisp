@@ -80,7 +80,7 @@ should be :place, :transform, or :pull if handle failure will take it")
             :initarg :message
             :initform (error "node error message must be set"))
    (items :reader node-error/items
-          :initarg items
+          :initarg :items
           :initform nil
           :documentation "the items to be reprocessed"))
   (:documentation "an internal node error, handled by run-iteration")

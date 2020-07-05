@@ -49,8 +49,7 @@ Due to the library we are using, there will be one per node")
 (defmacro rabbit-mq-call (step request &optional items)
   "wraps a rmq call to look for a standard error"
   `(handler-case ,request
-     (rabbitmq-library-error (c) (build-error-response ,step ,items c))
-     (:no-error (res) res)))
+     (rabbitmq-library-error (c) (build-error-response ,step ,items c))))
 
 (defun setup-connection
     (&key (host "localhost") (port 5672) (username "guest") (password "guest") (vhost "/"))
@@ -134,8 +133,7 @@ return :success t with the :result if things go well"
       (rabbitmq-library-error (c)
         (if (string= (rabbitmq-library-error/error-description c) "request timed out")
             (return-from pull-items items)
-            (build-error-response :pull items c)))
-      (:no-error (res) res))))
+            (build-error-response :pull items c))))))
 
 (defmethod transform-items ((node rmq-node) pulled)
   (handler-case
@@ -148,8 +146,7 @@ return :success t with the :result if things go well"
           into items))
     (error (c)
       (error 'node-error :step :transform :items pulled
-                         :message (format nil "~a" c)))
-    (:no-error (res) res)))
+                         :message (format nil "~a" c)))))
 
 (defmethod place-items ((node rmq-node) result)
   (iter:iterate
@@ -177,7 +174,5 @@ return :success t with the :result if things go well"
               (rabbitmq-library-error (c)
                 (vom:error "rmq-error- failed to nack item (~d): ~a"
                            (rabbitmq-library-error/error-code c)
-                           (rabbitmq-library-error/error-description c)))
-              (:no-error (res) res)))
-          (:no-error (res) res)))
+                           (rabbitmq-library-error/error-description c)))))))
       (error "unexpected step")))
