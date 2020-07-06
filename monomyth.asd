@@ -49,3 +49,27 @@
                  (:test-file "rmq-worker"))))
   :description "Test system for monomyth"
   :perform (test-op (op c) (funcall (intern #.(string :run) :prove) c)))
+
+(defsystem "monomyth/communication-tests-master"
+  :author ""
+  :license ""
+  :depends-on (:monomyth
+               :prove)
+  :defsystem-depends-on (:prove-asdf)
+  :components ((:module "communication-tests/master"
+                :components
+                ()))
+  :description "Test system for monomyth for inter machine communication, master perspective"
+  :perform (test-op (op c) (funcall (intern #.(string :run) :prove) c)))
+
+(defsystem "monomyth/communication-tests-worker"
+  :author ""
+  :license ""
+  :depends-on (:monomyth
+               :prove)
+  :defsystem-depends-on (:prove-asdf)
+  :components ((:module "communication-tests/worker"
+                :components
+                ()))
+  :description "Test system for monomyth for inter machine communication, worker perspective"
+  :perform (test-op (op c) (funcall (intern #.(string :run) :prove) c)))

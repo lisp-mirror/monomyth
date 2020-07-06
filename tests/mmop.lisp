@@ -106,7 +106,7 @@
             (is (rmq-node-recipe/source-queue got-res) (rmq-node-recipe/source-queue recipe))
             (is (rmq-node-recipe/dest-queue got-res) (rmq-node-recipe/dest-queue recipe))))))))
 
-(subtest "MMOP/0 worker-ready-success"
+(subtest "MMOP/0 node-start-success"
   (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
         (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
     (pzmq:with-context nil
@@ -122,7 +122,7 @@
           (is (mmop-m:start-node-success-v0-client-id res) client-name)
           (is (mmop-m:start-node-success-v0-type res) "TEST"))))))
 
-(subtest "MMOP/0 worker-ready-failure"
+(subtest "MMOP/0 node-start-failure"
   (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
         (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
     (pzmq:with-context nil
