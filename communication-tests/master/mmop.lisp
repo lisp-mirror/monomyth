@@ -5,9 +5,6 @@
 
 (plan nil)
 
-(diag "Ready to start tests?")
-(read-line)
-
 (subtest "msg-happy-path-to-router"
   (pzmq:with-context nil
     (pzmq:with-socket client :router

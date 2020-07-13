@@ -6,9 +6,6 @@
 (plan nil)
 (vom:config t :info)
 
-(diag "Ready to start tests?")
-(read-line)
-
 (subtest
  "worker starts/shutdown"
  (pzmq:with-context nil
