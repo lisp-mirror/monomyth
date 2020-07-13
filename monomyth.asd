@@ -58,7 +58,8 @@
   :defsystem-depends-on (:prove-asdf)
   :components ((:module "communication-tests/master"
                 :components
-                ((:test-file "mmop"))))
+                ((:test-file "mmop")
+                 (:test-file "rmq-worker"))))
   :description "Test system for monomyth for inter machine communication, master perspective"
   :perform (test-op (op c) (funcall (intern #.(string :run) :prove) c)))
 
@@ -70,6 +71,7 @@
   :defsystem-depends-on (:prove-asdf)
   :components ((:module "communication-tests/worker"
                 :components
-                ((:test-file "mmop"))))
+                ((:test-file "mmop")
+                 (:test-file "rmq-worker"))))
   :description "Test system for monomyth for inter machine communication, worker perspective"
   :perform (test-op (op c) (funcall (intern #.(string :run) :prove) c)))
