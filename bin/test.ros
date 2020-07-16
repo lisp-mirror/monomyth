@@ -5,7 +5,7 @@ exec ros -Q -- $0 "$@"
 |#
 (progn ;;init forms
   (ros:ensure-asdf)
-  #+quicklisp(ql:quickload '(:prove) :silent t)
+  #+quicklisp(ql:quickload '(:rove) :silent t)
   )
 
 (defpackage :ros.script.test.3799949831
@@ -14,5 +14,5 @@ exec ros -Q -- $0 "$@"
 
 (defun main (&rest argv)
   (declare (ignorable argv))
-  (if (prove:run :monomyth/tests) 0 1))
+  (if (rove:run :monomyth/tests) 0 1))
 ;;; vim: set ft=lisp lisp:
