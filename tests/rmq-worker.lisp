@@ -132,12 +132,19 @@
                                      *dest-queue* *dest-queue* *dest-queue*
                                      :host *rmq-host*))
       (startup work-node nil)
-      (iter:iterate
-        (iter:for item in items)
-        (iter:for got = (get-message work-node))
-        (ok (string= (rmq-message-body got) (format nil "test ~a" item)))
-        (ack-message work-node got))
-      (shutdown work-node)))
+
+      (labels ((get-msg-w-restart ()
+                 (handler-case (get-message work-node)
+                   (rabbitmq-error (c)
+                     (declare (ignore c))
+                     (sleep .1)
+                     (get-msg-w-restart)))))
+        (iter:iterate
+          (iter:for item in items)
+          (iter:for got = (get-msg-w-restart))
+          (ok (string= (rmq-message-body got) (format nil "test ~a" item)))
+          (ack-message work-node got))
+        (shutdown work-node))))
 
   (testing "multiple nodes"
     (let ((recipe1 (build-rmq-node-recipe :test1 "#'(lambda (x) (format nil \"test1 ~a\" x))"
@@ -185,9 +192,15 @@
       (setf work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
                                      queue-4 queue-4 queue-4 :host *rmq-host*))
       (startup work-node nil)
-      (iter:iterate
-        (iter:for item in items)
-        (iter:for got = (get-message work-node))
-        (ok (string= (rmq-message-body got) (format nil "test3 test2 test1 ~a" item)))
-        (ack-message work-node got))
-      (shutdown work-node))))
+      (labels ((get-msg-w-restart ()
+                 (handler-case (get-message work-node)
+                   (rabbitmq-error (c)
+                     (declare (ignore c))
+                     (sleep .1)
+                     (get-msg-w-restart)))))
+        (iter:iterate
+          (iter:for item in items)
+          (iter:for got = (get-msg-w-restart))
+          (ok (string= (rmq-message-body got) (format nil "test3 test2 test1 ~a" item)))
+          (ack-message work-node got))
+        (shutdown work-node)))))

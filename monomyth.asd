@@ -53,24 +53,22 @@
   :author ""
   :license ""
   :depends-on (:monomyth
-               :prove)
-  :defsystem-depends-on (:prove-asdf)
+               :rove)
   :components ((:module "communication-tests/master"
                 :components
-                ((:test-file "mmop")
-                 (:test-file "rmq-worker"))))
+                ((:file "mmop")
+                 (:file "rmq-worker"))))
   :description "Test system for monomyth for inter machine communication, master perspective"
-  :perform (test-op (op c) (funcall (intern #.(string :run) :prove) c)))
+  :perform (test-op (op c) (symbol-call :rove '#:run c)))
 
 (defsystem "monomyth/communication-tests-worker"
   :author ""
   :license ""
   :depends-on (:monomyth
-               :prove)
-  :defsystem-depends-on (:prove-asdf)
+               :rove)
   :components ((:module "communication-tests/worker"
                 :components
-                ((:test-file "mmop")
-                 (:test-file "rmq-worker"))))
+                ((:file "mmop")
+                 (:file "rmq-worker"))))
   :description "Test system for monomyth for inter machine communication, worker perspective"
-  :perform (test-op (op c) (funcall (intern #.(string :run) :prove) c)))
+  :perform (test-op (op c) (symbol-call :rove '#:run c)))
