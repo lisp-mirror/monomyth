@@ -1,5 +1,6 @@
 (defpackage monomyth/rmq-node
-  (:use :cl :monomyth/node :cl-rabbit)
+  (:use :cl :monomyth/node :cl-rabbit :stmx)
+  (:shadow :closer-mop)
   (:export setup-connection
            make-rmq-node
            build-rmq-message
@@ -14,25 +15,31 @@
 (defparameter *get-timeout* 100)
 (defparameter *channel* 1)
 
-(defclass rmq-node (node)
-  ((conn :initform (error "connection must be supplied")
-         :initarg :conn
-         :reader rmq-node/conn
-         :documentation "the rmq connection, there should only be one per machine.
+(transactional
+    (defclass rmq-node (node)
+      ((conn :initform (error "connection must be supplied")
+             :initarg :conn
+             :reader rmq-node/conn
+             :transactional nil
+             :documentation "the rmq connection, there should only be one per machine.
 Due to the library we are using, there will be one per node")
-   (exchange :initarg :exchange
-             :initform ""
-             :reader rmq-node/exchange)
-   (source-queue :initarg :source
-                 :initform (error "source queue must be set")
-                 :reader rmq-node/source-queue)
-   (dest-queue :initarg :dest
-               :initform (error "destination queue must be set")
-               :reader rmq-node/dest-queue)
-   (fail-queue :initarg :fail
-               :initform (error "failure queue must be set")
-               :reader rmq-node/fail-queue))
-  (:documentation "a node type specially designed to work with rabbit mq"))
+       (exchange :initarg :exchange
+                 :initform ""
+                 :transactional nil
+                 :reader rmq-node/exchange)
+       (source-queue :initarg :source
+                     :transactional nil
+                     :initform (error "source queue must be set")
+                     :reader rmq-node/source-queue)
+       (dest-queue :initarg :dest
+                   :transactional nil
+                   :initform (error "destination queue must be set")
+                   :reader rmq-node/dest-queue)
+       (fail-queue :initarg :fail
+                   :transactional nil
+                   :initform (error "failure queue must be set")
+                   :reader rmq-node/fail-queue))
+      (:documentation "a node type specially designed to work with rabbit mq")))
 
 (defstruct (rmq-message (:constructor build-rmq-message))
   "central structure passed through the node"

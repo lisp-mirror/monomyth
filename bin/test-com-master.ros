@@ -8,11 +8,13 @@ exec ros -Q -- $0 "$@"
   #+quicklisp(ql:quickload '(:rove) :silent t)
   )
 
-(defpackage :ros.script.test.3799949831
+(defpackage :ros.script.test-com-master.3802982138
   (:use :cl))
-(in-package :ros.script.test.3799949831)
+(in-package :ros.script.test-com-master.3802982138)
 
 (defun main (&rest argv)
   (declare (ignorable argv))
-  (if (rove:run :monomyth/tests) 0 1))
+  (format t "Ready to start tests?~%")
+  (read-line)
+  (if (rove:run :monomyth/communication-tests-master) 0 1))
 ;;; vim: set ft=lisp lisp:

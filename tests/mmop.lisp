@@ -1,159 +1,158 @@
 (defpackage monomyth/tests/mmop
-  (:use :cl :prove :monomyth/mmop :monomyth/rmq-node-recipe :monomyth/node-recipe))
+  (:use :cl :rove :monomyth/mmop :monomyth/rmq-node-recipe :monomyth/node-recipe))
 (in-package :monomyth/tests/mmop)
 
-(plan nil)
+(deftest to-router
+  (testing "single message"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
+          (test-frames '("1" "2" "3")))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (client :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
 
-(subtest "msg-happy-path-to-router"
-  (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
-        (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
-        (test-frames '("1" "2" "3")))
-    (pzmq:with-context nil
-      (pzmq:with-sockets ((server :router) (client :dealer))
-        (pzmq:setsockopt server :identity server-name)
-        (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "tcp://localhost:55555")
-        (pzmq:bind server "tcp://*:55555")
+          (send-msg-frames client "mmop/test" test-frames)
+          (ok (equal (pull-msg server)
+                     (cons client-name test-frames)))))))
 
-        (send-msg-frames client "mmop/test" test-frames)
-        (is (pull-msg server)
-            (cons client-name test-frames))))))
+  (testing "double messages"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
+          (test-frames '("1" "2" "3")))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (client :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
 
-(subtest "msg-happy-path-to-router-with-second-message"
-  (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
-        (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
-        (test-frames '("1" "2" "3")))
-    (pzmq:with-context nil
-      (pzmq:with-sockets ((server :router) (client :dealer))
-        (pzmq:setsockopt server :identity server-name)
-        (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "tcp://localhost:55555")
-        (pzmq:bind server "tcp://*:55555")
+          (send-msg-frames client "mmop/test" test-frames)
+          (send-msg-frames client "mmop/test" '("test"))
+          (ok (equal (pull-msg server)
+                     (cons client-name test-frames))))))))
 
-        (send-msg-frames client "mmop/test" test-frames)
-        (send-msg-frames client "mmop/test" '("test"))
-        (is (pull-msg server)
-            (cons client-name test-frames))))))
+(deftest to-dealer
+  (testing "single messages"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
+          (test-frames '("1" "2" "3")))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (client :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
 
-(subtest "msg-happy-path-to-dealer"
-  (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
-        (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
-        (test-frames '("1" "2" "3")))
-    (pzmq:with-context nil
-      (pzmq:with-sockets ((server :router) (client :dealer))
-        (pzmq:setsockopt server :identity server-name)
-        (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "tcp://localhost:55555")
-        (pzmq:bind server "tcp://*:55555")
+          (send-msg-frames client "mmop/test" '("READY"))
+          (pull-msg server)
+          (send-msg-frames server "mmop/test" (cons client-name test-frames))
+          (ok (equal (pull-msg client) test-frames))))))
 
-        (send-msg-frames client "mmop/test" '("READY"))
-        (pull-msg server)
-        (send-msg-frames server "mmop/test" (cons client-name test-frames))
-        (is (pull-msg client) test-frames)))))
+  (testing "double messages"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
+          (test-frames '("1" "2" "3")))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (client :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
 
-(subtest "msg-happy-path-to-dealer-with-second-msg"
-  (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
-        (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
-        (test-frames '("1" "2" "3")))
-    (pzmq:with-context nil
-      (pzmq:with-sockets ((server :router) (client :dealer))
-        (pzmq:setsockopt server :identity server-name)
-        (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "tcp://localhost:55555")
-        (pzmq:bind server "tcp://*:55555")
+          (send-msg-frames client "mmop/test" '("READY"))
+          (pull-msg server)
+          (send-msg-frames server "mmop/test" (cons client-name test-frames))
+          (send-msg-frames server "mmop/test" `(,client-name "test"))
+          (ok (equal (pull-msg client) test-frames)))))))
 
-        (send-msg-frames client "mmop/test" '("READY"))
-        (pull-msg server)
-        (send-msg-frames server "mmop/test" (cons client-name test-frames))
-        (send-msg-frames server "mmop/test" `(,client-name "test"))
-        (is (pull-msg client) test-frames)))))
+(deftest MMOP/0
+  (testing "worker-ready"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (client :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
 
-(subtest "MMOP/0 worker-ready"
-  (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
-        (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
-    (pzmq:with-context nil
-      (pzmq:with-sockets ((server :router) (client :dealer))
-        (pzmq:setsockopt server :identity server-name)
-        (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "tcp://localhost:55555")
-        (pzmq:bind server "tcp://*:55555")
+          (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
+          (let ((res (mmop-m:pull-master-message server)))
+            (ok (eq (type-of res) 'mmop-m:worker-ready-v0))
+            (ok (string= (mmop-m:worker-ready-v0-client-id res) client-name)))))))
 
-        (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
-        (let ((res (mmop-m:pull-master-message server)))
-          (is-type res 'mmop-m:worker-ready-v0)
-          (is (mmop-m:worker-ready-v0-client-id res) client-name))))))
+  (testing "start-node"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
+          (recipe (build-rmq-node-recipe :test "#'(lambda (x) (1+ x))" "test-s" "test-d")))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (client :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
 
-(subtest "MMOP/0 start-node"
-  (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
-        (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
-        (recipe (build-rmq-node-recipe :test "#'(lambda (x) (1+ x))" "test-s" "test-d")))
-    (pzmq:with-context nil
-      (pzmq:with-sockets ((server :router) (client :dealer))
-        (pzmq:setsockopt server :identity server-name)
-        (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "tcp://localhost:55555")
-        (pzmq:bind server "tcp://*:55555")
+          (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
+          (mmop-m:pull-master-message server)
+          (send-msg server *mmop-v0* (mmop-m:make-start-node-v0 client-name recipe))
+          (let ((res (mmop-w:pull-worker-message client)))
+            (ok (eq (type-of res) 'mmop-w:start-node-v0))
+            (ok (string= (mmop-w:start-node-v0-type res) "TEST"))
+            (let ((got-res (mmop-w:start-node-v0-recipe res)))
+              (ok (eq (node-recipe/type got-res) (node-recipe/type recipe)))
+              (ok (string= (node-recipe/transform-fn got-res) (node-recipe/transform-fn recipe)))
+              (ok (string= (rmq-node-recipe/source-queue got-res) (rmq-node-recipe/source-queue recipe)))
+              (ok (string= (rmq-node-recipe/dest-queue got-res) (rmq-node-recipe/dest-queue recipe)))))))))
 
-        (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
-        (mmop-m:pull-master-message server)
-        (send-msg server *mmop-v0* (mmop-m:make-start-node-v0 client-name recipe))
-        (let ((res (mmop-w:pull-worker-message client)))
-          (is-type res 'mmop-w:start-node-v0)
-          (is (mmop-w:start-node-v0-type res) "TEST")
-          (let ((got-res (mmop-w:start-node-v0-recipe res)))
-            (is (node-recipe/type got-res) (node-recipe/type recipe))
-            (is (node-recipe/transform-fn got-res) (node-recipe/transform-fn recipe))
-            (is (rmq-node-recipe/source-queue got-res) (rmq-node-recipe/source-queue recipe))
-            (is (rmq-node-recipe/dest-queue got-res) (rmq-node-recipe/dest-queue recipe))))))))
+  (testing "node-start-success"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (client :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
 
-(subtest "MMOP/0 worker-ready-success"
-  (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
-        (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
-    (pzmq:with-context nil
-      (pzmq:with-sockets ((server :router) (client :dealer))
-        (pzmq:setsockopt server :identity server-name)
-        (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "tcp://localhost:55555")
-        (pzmq:bind server "tcp://*:55555")
+          (send-msg client *mmop-v0* (mmop-w:make-start-node-success-v0 "TEST"))
+          (let ((res (mmop-m:pull-master-message server)))
+            (ok (eq (type-of res) 'mmop-m:start-node-success-v0))
+            (ok (string= (mmop-m:start-node-success-v0-client-id res) client-name))
+            (ok (string= (mmop-m:start-node-success-v0-type res) "TEST")))))))
 
-        (send-msg client *mmop-v0* (mmop-w:make-start-node-success-v0 "TEST"))
-        (let ((res (mmop-m:pull-master-message server)))
-          (is-type res 'mmop-m:start-node-success-v0)
-          (is (mmop-m:start-node-success-v0-client-id res) client-name)
-          (is (mmop-m:start-node-success-v0-type res) "TEST"))))))
+  (testing "node-start-failure"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (client :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
 
-(subtest "MMOP/0 worker-ready-failure"
-  (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
-        (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
-    (pzmq:with-context nil
-      (pzmq:with-sockets ((server :router) (client :dealer))
-        (pzmq:setsockopt server :identity server-name)
-        (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "tcp://localhost:55555")
-        (pzmq:bind server "tcp://*:55555")
+          (send-msg client *mmop-v0* (mmop-w:make-start-node-failure-v0
+                                      "TEST" "test" "test-msg"))
+          (let ((res (mmop-m:pull-master-message server)))
+            (ok (eq (type-of res) 'mmop-m:start-node-failure-v0))
+            (ok (string= (mmop-m:start-node-failure-v0-client-id res) client-name))
+            (ok (string= (mmop-m:start-node-failure-v0-type res) "TEST"))
+            (ok (string= (mmop-m:start-node-failure-v0-reason-cat res) "test"))
+            (ok (string= (mmop-m:start-node-failure-v0-reason-msg res) "test-msg")))))))
 
-        (send-msg client *mmop-v0* (mmop-w:make-start-node-failure-v0
-                                    "TEST" "test" "test-msg"))
-        (let ((res (mmop-m:pull-master-message server)))
-          (is-type res 'mmop-m:start-node-failure-v0)
-          (is (mmop-m:start-node-failure-v0-client-id res) client-name)
-          (is (mmop-m:start-node-failure-v0-type res) "TEST")
-          (is (mmop-m:start-node-failure-v0-reason-cat res) "test")
-          (is (mmop-m:start-node-failure-v0-reason-msg res) "test-msg"))))))
+  (testing "stop-worker"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (client :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
 
-(subtest "MMOP/0 stop-worker"
-  (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
-        (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
-    (pzmq:with-context nil
-      (pzmq:with-sockets ((server :router) (client :dealer))
-        (pzmq:setsockopt server :identity server-name)
-        (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client "tcp://localhost:55555")
-        (pzmq:bind server "tcp://*:55555")
-
-        (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
-        (mmop-m:pull-master-message server)
-        (send-msg server *mmop-v0* (mmop-m:make-shutdown-worker-v0 client-name))
-        (is-type (mmop-w:pull-worker-message client) 'mmop-w:shutdown-worker-v0)))))
-
-(finalize)
+          (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
+          (mmop-m:pull-master-message server)
+          (send-msg server *mmop-v0* (mmop-m:make-shutdown-worker-v0 client-name))
+          (ok (eq (type-of (mmop-w:pull-worker-message client)) 'mmop-w:shutdown-worker-v0)))))))

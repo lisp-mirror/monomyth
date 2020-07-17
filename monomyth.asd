@@ -22,6 +22,8 @@
                  (:file "master"))))
   :depends-on (:flexi-streams
                :cl-store
+               :stmx
+               :closer-mop
                :rutils
                :trivia
                :alexandria
@@ -38,14 +40,37 @@
   :author ""
   :license ""
   :depends-on (:monomyth
-               :prove
+               :rove
                :cl-mock)
-  :defsystem-depends-on (:prove-asdf)
   :components ((:module "tests"
                 :components
-                ((:test-file "rmq-node")
-                 (:test-file "rmq-node-recipe")
-                 (:test-file "mmop")
-                 (:test-file "rmq-worker"))))
+                ((:file "rmq-node")
+                 (:file "rmq-node-recipe")
+                 (:file "mmop")
+                 (:file "rmq-worker"))))
   :description "Test system for monomyth"
-  :perform (test-op (op c) (funcall (intern #.(string :run) :prove) c)))
+  :perform (test-op (op c) (symbol-call :rove '#:run c)))
+
+(defsystem "monomyth/communication-tests-master"
+  :author ""
+  :license ""
+  :depends-on (:monomyth
+               :rove)
+  :components ((:module "communication-tests/master"
+                :components
+                ((:file "mmop")
+                 (:file "rmq-worker"))))
+  :description "Test system for monomyth for inter machine communication, master perspective"
+  :perform (test-op (op c) (symbol-call :rove '#:run c)))
+
+(defsystem "monomyth/communication-tests-worker"
+  :author ""
+  :license ""
+  :depends-on (:monomyth
+               :rove)
+  :components ((:module "communication-tests/worker"
+                :components
+                ((:file "mmop")
+                 (:file "rmq-worker"))))
+  :description "Test system for monomyth for inter machine communication, worker perspective"
+  :perform (test-op (op c) (symbol-call :rove '#:run c)))
