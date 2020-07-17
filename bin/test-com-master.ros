@@ -14,7 +14,7 @@ exec ros -Q -- $0 "$@"
 
 (defun main (&rest argv)
   (declare (ignorable argv))
-  (rove:diag "Ready to start tests?")
+  (format t "Ready to start tests?~%")
   (read-line)
   (if (rove:run :monomyth/communication-tests-master) 0 1))
 ;;; vim: set ft=lisp lisp:

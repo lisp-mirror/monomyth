@@ -35,6 +35,8 @@
           (send-msg-frames server "mmop/test" '("test"))
           (pass "messages sent"))))))
 
+(sleep .1)
+
 (deftest to-dealer
   (testing "single message"
     (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid))))
