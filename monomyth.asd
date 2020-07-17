@@ -22,6 +22,8 @@
                  (:file "master"))))
   :depends-on (:flexi-streams
                :cl-store
+               :stmx
+               :closer-mop
                :rutils
                :trivia
                :alexandria

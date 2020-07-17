@@ -51,7 +51,7 @@
                            *source-queue* *dest-queue* *fail-queue*
                            :host (uiop:getenv "TEST_RMQ")
                            :batch-size 1)))
-      (startup pulling-node)
+      (startup pulling-node nil)
       (ok (signals (get-message pulling-node) 'rabbitmq-library-error))
       (shutdown pulling-node))))
 

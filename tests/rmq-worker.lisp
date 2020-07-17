@@ -89,7 +89,7 @@
 
   (skip "worker catches bad recipe type"))
 
-(defparameter *test-process-time* 5)
+(defparameter *test-process-time* 2)
 (defparameter queue-1 (format nil "process-test-~a-1" (get-universal-time)))
 (defparameter queue-2 (format nil "process-test-~a-2" (get-universal-time)))
 (defparameter queue-3 (format nil "process-test-~a-3" (get-universal-time)))
