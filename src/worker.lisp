@@ -50,28 +50,39 @@ it should be okay start a node"))
 (defun run-worker (worker)
   "main event loop for the worker"
   (iter:iterate
-    (iter:for msg = (pull-worker-message (worker/socket worker)))
-    (trivia:match msg
-      ((shutdown-worker-v0) (iter:finish))
+    (iter:while
+     (handler-case (handle-message
+                    worker (pull-worker-message (worker/socket worker)))
+       (mmop-error (c)
+         (vom:error "could not pull MMOP message (version: ~a): ~a"
+                    (mmop-error/version c) (mmop-error/message c)))))))
 
-      ((start-node-v0 type recipe)
-       (handler-case (build-node worker recipe)
-         (end-of-file (e)
-           (declare (ignore e))
-           (send-msg (worker/socket worker) (worker/mmop-version worker)
-                     (mmop-w:make-start-node-failure-v0
-                      type "function read" "end of file (mismatched forms)")))
-         (sb-pcl::no-applicable-method-error (e)
-           (declare (ignore e))
-           (send-msg (worker/socket worker) (worker/mmop-version worker)
-                     (mmop-w:make-start-node-failure-v0
-                      type "recipe build" "worker cannot handle recipe type")))
-         (:no-error (res)
-           (startup res)
-           (let ((name (node/node-name res)))
-             (setf (gethash name (worker/nodes worker)) res)
-             (send-msg (worker/socket worker) (worker/mmop-version worker)
-                       (mmop-w:make-start-node-success-v0 type)))))))))
+(defun handle-message (worker mmop-msg)
+  "handles a specific message for the worker, return t if the worker should continue"
+  (let ((res (trivia:match mmop-msg
+               ((shutdown-worker-v0) (return-from handle-message nil))
+
+               ((start-node-v0 type recipe)
+                (handler-case (build-node worker recipe)
+                  (end-of-file (e)
+                    (declare (ignore e))
+                    (send-msg (worker/socket worker) (worker/mmop-version worker)
+                              (mmop-w:make-start-node-failure-v0
+                               type "function read" "end of file (mismatched forms)")))
+                  (sb-pcl::no-applicable-method-error (e)
+                    (declare (ignore e))
+                    (send-msg (worker/socket worker) (worker/mmop-version worker)
+                              (mmop-w:make-start-node-failure-v0
+                               type "recipe build" "worker cannot handle recipe type")))
+                  (:no-error (res)
+                    (startup res)
+                    (let ((name (node/node-name res)))
+                      (setf (gethash name (worker/nodes worker)) res)
+                      (send-msg (worker/socket worker) (worker/mmop-version worker)
+                                (mmop-w:make-start-node-success-v0 type)))))))))
+    (unless res
+      (vom:error "did not recognize [~a] in worker event loop" mmop-msg))
+    t))
 
 (defmethod stop-worker ((worker worker))
   (vom:info "stopping worker ~a" (worker/name worker))
