@@ -178,3 +178,17 @@ and a table of node type symbols to node recipes"
       (first (first (remove-if-not
                      #'(lambda (pair) (zerop (total-possible-threads (cdr pair))))
                      (ghash-pairs (master-workers master)))))))
+
+(transaction
+    (defun total-posible-nodes (worker type-id)
+      "calculates the total possible worker threads of that type"
+      (+ (get-ghash (worker-info-type-counts) type-id)
+          (get-ghash (worker-info-outstanding-request-counts) type-id))))
+
+(transaction
+    (defun determine-worker-for-node (master type-id)
+      ""
+      (let ((empty-worker (find-empty-worker master)))
+        (if empty-worker
+            empty-worker
+            ()))))
