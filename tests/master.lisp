@@ -5,8 +5,10 @@
 (vom:config t :info)
 
 (deftest start-stop
-  (stop-master (start-master 4 55555))
-  (pass "master-stopped")
+  (let ((master (start-master 4 55555)))
+    (sleep .1)
+    (stop-master master)
+    (pass "master-stopped"))
   (skip "delete threads"))
 
 (deftest can-handle-worker-messages
@@ -24,12 +26,13 @@
       (pzmq:connect client1 "tcp://localhost:55555")
       (pzmq:connect client2 "tcp://localhost:55555")
       (pzmq:connect client3 "tcp://localhost:55555")
-      (sleep 1)
+      (sleep .1)
 
       (testing "worker-ready-v0"
         (send-msg client1 *mmop-v0* (mmop-w:make-worker-ready-v0))
         (send-msg client2 *mmop-v0* (mmop-w:make-worker-ready-v0))
         (send-msg client3 *mmop-v0* (mmop-w:make-worker-ready-v0))
+        (sleep .1)
 
         (iter:iterate
           (iter:for client in (ghash-keys (master-workers master)))

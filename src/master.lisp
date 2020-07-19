@@ -201,7 +201,7 @@ and a table of node type symbols to node recipes"
       "adds a recipe to the master records"
       (setf (get-ghash (master-recipes master) (symbol-name (node-recipe/type recipe))) recipe)))
 
-(defun start-node (master type-id)
+(defun ask-to-start-node (master type-id)
   "attempts to start a node of type-id on one of the masters workers.
 returns t if it works, nil otherwise"
   (let ((recipe (get-ghash (master-recipes master) type-id)))
