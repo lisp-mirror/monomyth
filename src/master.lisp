@@ -1,5 +1,5 @@
 (defpackage monomyth/master
-  (:use :cl :stmx :stmx.util :monomyth/mmop :trivia)
+  (:use :cl :stmx :stmx.util :monomyth/mmop :monomyth/node-recipe :trivia)
   (:export start-master
            stop-master
            master-workers
@@ -34,6 +34,8 @@ and a table of node type symbols to node recipes"
       (context (pzmq:ctx-new)
        :read-only t
        :transactional nil)
+      (outbound-socket nil
+       :transactional nil)
       (running t)))
 
 (defun start-master (thread-count client-port)
@@ -41,10 +43,15 @@ and a table of node type symbols to node recipes"
   (vom:info "starting master server with ~a threads listening for workers at port ~a"
             thread-count client-port)
   (let ((master (build-master)))
+    (atomic
+     (let ((socket (pzmq:socket (master-context master) :router)))
+       (setf (master-outbound-socket master) socket)
+       (pzmq:bind socket (format nil "tcp://*:~a" client-port))))
+
     (iter:iterate
       (iter:repeat thread-count)
       (start-handler-thread master))
-    (start-router-loop master client-port thread-count)
+    (start-router-loop master thread-count)
     master))
 
 (defun stop-master (master)
@@ -58,22 +65,21 @@ and a table of node type symbols to node recipes"
                                       (rtl:starts-with *worker-thread-prefix* th-name))))
                  (bt:all-threads)))
       (bt:destroy-thread th))
+    (pzmq:close (master-outbound-socket master))
     (pzmq:ctx-destroy context)))
 
-(defun start-router-loop (master client-port thread-count)
+(defun start-router-loop (master thread-count)
   "runs the thread router's event loop in a new thread"
   (bt:make-thread
    #'(lambda ()
-       (pzmq:with-sockets (((workers (master-context master)) :router)
-                           ((threads (master-context master)) :router))
+       (pzmq:with-socket (threads (master-context master)) :router
          (pzmq:bind threads *internal-conn-name*)
-         (pzmq:bind workers (format nil "tcp://*:~a" client-port))
 
          (iter:iterate
            (iter:while (master-running master))
            (iter:for worker-id = (first (handle-pull-msg threads "get-thread")))
            (unless worker-id (iter:next-iteration))
-           (iter:for msg-frames = (handle-pull-msg workers "get-msg"))
+           (iter:for msg-frames = (handle-pull-msg (master-outbound-socket master) "get-msg"))
            (unless msg-frames (iter:next-iteration))
            (forward-frames-to-worker threads worker-id msg-frames)
 
@@ -167,28 +173,48 @@ and a table of node type symbols to node recipes"
          (build-worker-info))))
 
 (transaction
-    (defun total-possible-threads (worker-info)
-      "counts the total number of potential working threads known for a node"
-      (+ (reduce #'+ (gmap-values (worker-info-type-counts worker-info)))
-          (reduce #'+ (gmap-values (worker-info-outstanding-request-counts worker-info))))))
-
-(transaction
-    (defun find-empty-worker (master)
-      "attempt to find a worker with no nodes"
-      (first (first (remove-if-not
-                     #'(lambda (pair) (zerop (total-possible-threads (cdr pair))))
-                     (ghash-pairs (master-workers master)))))))
-
-(transaction
     (defun total-posible-nodes (worker type-id)
       "calculates the total possible worker threads of that type"
-      (+ (get-ghash (worker-info-type-counts) type-id)
-          (get-ghash (worker-info-outstanding-request-counts) type-id))))
+      (+ (get-ghash (worker-info-type-counts worker) type-id 0)
+          (get-ghash (worker-info-outstanding-request-counts worker) type-id 0))))
+
+(transaction
+    (defun find-worker-lowest-node-type-count (master type-id)
+      "finds the worker id with the smallest number of those nodes running"
+      (first
+       (reduce
+        #'(lambda (pair1 pair2)
+            (if (< (second pair1) (second pair2))
+                pair1 pair2))
+        (mapcar
+         #'(lambda (worker-pair)
+             `(,(first worker-pair) ,(total-posible-nodes (second worker-pair) type-id)))
+         (ghash-pairs (master-workers master)))))))
 
 (transaction
     (defun determine-worker-for-node (master type-id)
-      ""
-      (let ((empty-worker (find-empty-worker master)))
-        (if empty-worker
-            empty-worker
-            ()))))
+      "determines the best worker id for the recipe type"
+      (find-worker-lowest-node-type-count master type-id)))
+
+(transaction
+    (defun add-recipe (master recipe)
+      "adds a recipe to the master records"
+      (setf (get-ghash (master-recipes master) (symbol-name (node-recipe/type recipe))) recipe)))
+
+(defun start-node (master type-id)
+  "attempts to start a node of type-id on one of the masters workers.
+returns t if it works, nil otherwise"
+  (let ((recipe (get-ghash (master-recipes master) type-id)))
+    (if recipe
+        (handler-case
+            (progn
+              (send-msg (master-outbound-socket master) *mmop-v0*
+                        (mmop-m:make-start-node-v0
+                         (determine-worker-for-node master type-id) recipe))
+              t)
+          (mmop-error (c)
+            (progn (vom:error "could not send start node message (mmop version: ~a): ~a"
+                              (mmop-error/version c) (mmop-error/message c))
+                   nil)))
+        (progn (vom:error "could not find recipe type ~a" type-id)
+               nil))))

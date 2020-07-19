@@ -6,7 +6,8 @@
 
 (deftest start-stop
   (stop-master (start-master 4 55555))
-  (pass "master-stopped"))
+  (pass "master-stopped")
+  (skip "delete threads"))
 
 (deftest can-handle-worker-messages
   (let* ((master (start-master 2 55555))
