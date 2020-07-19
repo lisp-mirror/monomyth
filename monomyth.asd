@@ -1,7 +1,7 @@
 (defsystem "monomyth"
   :version "0.1.0"
-  :author ""
-  :license ""
+  :author "Paul Ricks"
+  :license "MPL 2.0"
   :components ((:module "src"
                 :components
                 ((:file "node-recipe")
@@ -33,12 +33,12 @@
                :vom
                :cl-rabbit
                :babel)
-  :description ""
+  :description "A distributed data processing library for CL"
   :in-order-to ((test-op (test-op "monomyth/tests"))))
 
 (defsystem "monomyth/tests"
-  :author ""
-  :license ""
+  :author "Paul Ricks"
+  :license "MPL 2.2"
   :depends-on (:monomyth
                :rove
                :cl-mock)
@@ -52,8 +52,8 @@
   :perform (test-op (op c) (symbol-call :rove '#:run c)))
 
 (defsystem "monomyth/communication-tests-master"
-  :author ""
-  :license ""
+  :author "Paul Ricks"
+  :license "MPL 2.0"
   :depends-on (:monomyth
                :rove)
   :components ((:module "communication-tests/master"
@@ -64,8 +64,8 @@
   :perform (test-op (op c) (symbol-call :rove '#:run c)))
 
 (defsystem "monomyth/communication-tests-worker"
-  :author ""
-  :license ""
+  :author "Paul Ricks"
+  :license "MPL 2.0"
   :depends-on (:monomyth
                :rove)
   :components ((:module "communication-tests/worker"
