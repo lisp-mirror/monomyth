@@ -1,5 +1,6 @@
 (defpackage monomyth/master
-  (:use :cl :stmx :stmx.util :monomyth/mmop :monomyth/node-recipe :trivia)
+  (:use :cl :stmx :stmx.util :monomyth/mmop :monomyth/node-recipe :trivia
+        :monomyth/mmop-master)
   (:export start-master
            stop-master
            master-workers
@@ -11,6 +12,7 @@
            ask-to-start-node))
 (in-package :monomyth/master)
 
+(setf *arity-check-by-test-call* nil)
 (defparameter *internal-conn-name* "inproc://mmop-master-routing")
 (defparameter *ready-message* "READY")
 (defparameter *end-message* "END")
@@ -142,17 +144,18 @@ and a table of node type symbols to node recipes"
                 (start-successful master id type-id))
 
                ((mmop-m:start-node-failure-v0
-                 :client-id id :type type-id)
-                (start-unsuccessful master id type-id)))))
+                 :client-id id :type type-id :reason-cat cat :reason-msg msg)
+                (start-unsuccessful master id type-id cat msg)))))
 
     (unless res
       (v:error '(:master.handler.event-loop :mmop)
                "did not recognize [~a] in worker event loop" mmop-msg))
     t))
 
-(defun start-unsuccessful (master client-id type-id)
+(defun start-unsuccessful (master client-id type-id cat msg)
   "removes the record of the outstanding request"
-  (v:error :master.handler "~a node failed to start on ~a" type-id client-id)
+  (v:error :master.handler "~a node failed to start on ~a (~a): ~a"
+           type-id client-id cat msg)
   (atomic
    (decf (get-ghash
           (worker-info-outstanding-request-counts
@@ -167,10 +170,15 @@ and a table of node type symbols to node recipes"
           (worker-info-outstanding-request-counts
            (get-ghash (master-workers master) client-id))
           type-id))
-   (incf (get-ghash
-          (worker-info-type-counts
-           (get-ghash (master-workers master) client-id))
-          type-id))))
+   (let ((val (get-ghash
+               (worker-info-type-counts
+                (get-ghash (master-workers master) client-id))
+               type-id 0)))
+     (setf (get-ghash
+            (worker-info-type-counts
+             (get-ghash (master-workers master) client-id))
+            type-id)
+           (1+ val)))))
 
 (defun add-worker (master client-id)
   "adds a worker info and id to the master"
