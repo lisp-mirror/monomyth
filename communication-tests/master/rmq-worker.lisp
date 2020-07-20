@@ -3,7 +3,7 @@
         :monomyth/rmq-node-recipe :monomyth/rmq-node :monomyth/node))
 (in-package :monomyth/communication-tests-worker/rmq-worker)
 
-(vom:config t :info)
+(v:output-here *terminal-io*)
 (defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
 (defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
 (defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))

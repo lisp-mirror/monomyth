@@ -4,8 +4,7 @@
 (in-package :monomyth/tests/rmq-worker)
 
 (defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
-
-(vom:config t :info)
+(v:output-here *terminal-io*)
 
 (teardown
  (let ((conn (setup-connection :host (uiop:getenv "TEST_RMQ"))))

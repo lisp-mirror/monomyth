@@ -41,7 +41,7 @@ it should be okay start a node"))
   (format nil "monomyth-worker-~a" (make-v4-uuid)))
 
 (defmethod start-worker ((worker worker) master-address)
-  (vom:info "starting worker ~a" (worker/name worker))
+  (v:info :worker "starting worker ~a" (worker/name worker))
   (setf (worker/socket worker) (pzmq:socket (worker/context worker) :dealer))
   (pzmq:setsockopt (worker/socket worker) :identity (worker/name worker))
   (pzmq:connect (worker/socket worker) master-address)
@@ -54,8 +54,9 @@ it should be okay start a node"))
      (handler-case (handle-message
                     worker (pull-worker-message (worker/socket worker)))
        (mmop-error (c)
-         (vom:error "could not pull MMOP message (version: ~a): ~a"
-                    (mmop-error/version c) (mmop-error/message c)))))))
+         (v:error '(:worker :event-loop :mmop)
+                  "could not pull MMOP message (version: ~a): ~a"
+                  (mmop-error/version c) (mmop-error/message c)))))))
 
 (defun handle-message (worker mmop-msg)
   "handles a specific message for the worker, return t if the worker should continue"
@@ -68,27 +69,31 @@ it should be okay start a node"))
                     (declare (ignore e))
                     (send-msg (worker/socket worker) (worker/mmop-version worker)
                               (mmop-w:make-start-node-failure-v0
-                               type "function read" "end of file (mismatched forms)")))
+                               type "function read" "end of file (mismatched forms)"))
+                    t)
                   (sb-pcl::no-applicable-method-error (e)
                     (declare (ignore e))
                     (send-msg (worker/socket worker) (worker/mmop-version worker)
                               (mmop-w:make-start-node-failure-v0
-                               type "recipe build" "worker cannot handle recipe type")))
+                               type "recipe build" "worker cannot handle recipe type"))
+                    t)
                   (:no-error (res)
                     (startup res)
                     (let ((name (node/node-name res)))
                       (setf (gethash name (worker/nodes worker)) res)
                       (send-msg (worker/socket worker) (worker/mmop-version worker)
-                                (mmop-w:make-start-node-success-v0 type)))))))))
+                                (mmop-w:make-start-node-success-v0 type)))
+                    t))))))
     (unless res
-      (vom:error "did not recognize [~a] in worker event loop" mmop-msg))
+      (v:error '(:worker.event-loop :mmop)
+               "did not recognize [~a] in worker event loop" mmop-msg))
     t))
 
 (defmethod stop-worker ((worker worker))
-  (vom:info "stopping worker ~a" (worker/name worker))
+  (v:info :worker "stopping worker ~a" (worker/name worker))
   (iter:iterate
     (iter:for (name node) in-hashtable (worker/nodes worker))
-    (vom:info "shutting down node ~a" name)
+    (v:info '(:worker :node) "shutting down node ~a" name)
     (shutdown node))
   (pzmq:close (worker/socket worker))
   (pzmq:ctx-destroy (worker/context worker)))

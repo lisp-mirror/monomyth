@@ -109,12 +109,12 @@ should be :place, :transform, or :pull if handle failure will take it")
     (node-error (c)
       (let ((step (node-error/step c))
             (msg (node-error/message c)))
-        (vom:error "unexpected node error in ~a: ~a" step msg)
+        (v:error :node.event-loop "unexpected node error in ~a: ~a" step msg)
         (handle-failure node step (node-error/items c))))))
 
 (defmethod startup :after ((node node) &optional (build-worker-thread t))
   (when build-worker-thread
-    (vom:info "starting thread for ~a" (node/node-name node))
+    (v:info :node "starting thread for ~a" (node/node-name node))
     (bt:make-thread
      #'(lambda ()
          (iter:iterate

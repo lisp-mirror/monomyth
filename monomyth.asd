@@ -30,7 +30,7 @@
                :pzmq
                :uuid
                :iterate
-               :vom
+               :verbose
                :cl-rabbit
                :babel)
   :description ""

@@ -2,7 +2,7 @@
   (:use :cl :rove :monomyth/master :monomyth/mmop :stmx.util))
 (in-package :monomyth/tests/master)
 
-(vom:config t :info)
+(v:output-here *terminal-io*)
 
 (deftest start-stop
   (let ((master (start-master 4 55555)))

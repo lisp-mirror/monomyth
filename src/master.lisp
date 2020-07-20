@@ -40,8 +40,8 @@ and a table of node type symbols to node recipes"
 
 (defun start-master (thread-count client-port)
   "starts up all worker threads and the router loop for load balancing"
-  (vom:info "starting master server with ~a threads listening for workers at port ~a"
-            thread-count client-port)
+  (v:info :master "starting master server with ~a threads listening for workers at port ~a"
+          thread-count client-port)
   (let ((master (build-master)))
     (atomic
      (let ((socket (pzmq:socket (master-context master) :router)))
@@ -55,7 +55,7 @@ and a table of node type symbols to node recipes"
     master))
 
 (defun stop-master (master)
-  (vom:info "shutting down master server")
+  (v:info :master "shutting down master server")
   (let ((context (master-context master)))
     (atomic (setf (master-running master) nil))
     (sleep *shutdown-pause*)
@@ -97,14 +97,16 @@ and a table of node type symbols to node recipes"
   "constructs the message frames and sends them on to the thread"
   (handler-case (send-msg-frames socket nil (append `(,thread-id "") frames))
     (mmop-error (c)
-      (vom:error "could not forward message: ~a" (mmop-error/message c)))))
+      (v:error '(:master.router :mmop) "could not forward message: ~a"
+               (mmop-error/message c)))))
 
 (defun handle-pull-msg (socket step)
   "wraps the pull msg call in an appropriate handler"
   (handler-case (pull-msg socket)
     (mmop-error (c)
-      (vom:error "could not pull MMOP message (version: ~a) for ~a: ~a"
-                 (mmop-error/version c) step (mmop-error/message c))
+      (v:error '(:master.router :mmop)
+               "could not pull MMOP message (version: ~a) for ~a: ~a"
+               (mmop-error/version c) step (mmop-error/message c))
       nil)))
 
 (defun start-handler-thread (master)
@@ -121,15 +123,16 @@ and a table of node type symbols to node recipes"
              (pzmq:send router *ready-message*)
              (handler-case (handle-message master (mmop-m:pull-master-message router))
                (mmop-error (c)
-                 (vom:error "could not pull MMOP message (version: ~a): ~a"
-                            (mmop-error/version c) (mmop-error/message c)))))))
+                 (v:error '(:master.handler :mmop)
+                          "could not pull MMOP message (version: ~a): ~a"
+                          (mmop-error/version c) (mmop-error/message c)))))))
      :name idenifier)))
 
 (defun handle-message (master mmop-msg)
   "handles a specific message for the master, return t if the master should continue"
   (let ((res (match mmop-msg
                ((mmop-m:worker-ready-v0 :client-id client-id)
-                (atomic (add-worker master client-id)))
+                (add-worker master client-id))
 
                ((mmop-m:start-node-success-v0
                  :client-id id :type type-id)
@@ -140,12 +143,13 @@ and a table of node type symbols to node recipes"
                 (start-unsuccessful master id type-id)))))
 
     (unless res
-      (vom:error "did not recognize [~a] in worker event loop" mmop-msg))
+      (v:error '(:master.handler.event-loop :mmop)
+               "did not recognize [~a] in worker event loop" mmop-msg))
     t))
 
 (defun start-unsuccessful (master client-id type-id)
   "removes the record of the outstanding request"
-  (vom:error "~a node failed to start on ~a" type-id client-id)
+  (v:error :master.handler "~a node failed to start on ~a" type-id client-id)
   (atomic
    (decf (get-ghash
           (worker-info-outstanding-request-counts
@@ -154,7 +158,7 @@ and a table of node type symbols to node recipes"
 
 (defun start-successful (master client-id type-id)
   "removes the record of the outstanding request and increments the type count for that client"
-  (vom:info "~a node started on ~a" type-id client-id)
+  (v:info :master.handler "~a node started on ~a" type-id client-id)
   (atomic
    (decf (get-ghash
           (worker-info-outstanding-request-counts
@@ -167,7 +171,7 @@ and a table of node type symbols to node recipes"
 
 (defun add-worker (master client-id)
   "adds a worker info and id to the master"
-  (vom:info "worker ~a has signaled that it is ready" client-id)
+  (v:info :master.handler "worker ~a has signaled that it is ready" client-id)
   (atomic
    (setf (get-ghash (master-workers master) client-id)
          (build-worker-info))))
@@ -199,7 +203,9 @@ and a table of node type symbols to node recipes"
 (transaction
     (defun add-recipe (master recipe)
       "adds a recipe to the master records"
-      (setf (get-ghash (master-recipes master) (symbol-name (node-recipe/type recipe))) recipe)))
+      (setf (get-ghash (master-recipes master)
+                       (symbol-name (node-recipe/type recipe)))
+            recipe)))
 
 (defun ask-to-start-node (master type-id)
   "attempts to start a node of type-id on one of the masters workers.
@@ -213,8 +219,9 @@ returns t if it works, nil otherwise"
                          (determine-worker-for-node master type-id) recipe))
               t)
           (mmop-error (c)
-            (progn (vom:error "could not send start node message (mmop version: ~a): ~a"
-                              (mmop-error/version c) (mmop-error/message c))
+            (progn (v:error :master.handler
+                            "could not send start node message (mmop version: ~a): ~a"
+                            (mmop-error/version c) (mmop-error/message c))
                    nil)))
-        (progn (vom:error "could not find recipe type ~a" type-id)
+        (progn (v:error :master.handler "could not find recipe type ~a" type-id)
                nil))))
