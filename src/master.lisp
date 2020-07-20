@@ -3,9 +3,12 @@
   (:export start-master
            stop-master
            master-workers
+           master-recipes
            master-context
            worker-info-type-counts
-           worker-info-outstanding-request-counts))
+           worker-info-outstanding-request-counts
+           add-recipe
+           ask-to-start-node))
 (in-package :monomyth/master)
 
 (defparameter *internal-conn-name* "inproc://mmop-master-routing")
@@ -188,11 +191,11 @@ and a table of node type symbols to node recipes"
       (first
        (reduce
         #'(lambda (pair1 pair2)
-            (if (< (second pair1) (second pair2))
+            (if (< (cdr pair1) (cdr pair2))
                 pair1 pair2))
         (mapcar
          #'(lambda (worker-pair)
-             `(,(first worker-pair) ,(total-posible-nodes (second worker-pair) type-id)))
+             `(,(car worker-pair) . ,(total-posible-nodes (cdr worker-pair) type-id)))
          (ghash-pairs (master-workers master)))))))
 
 (transaction
@@ -213,15 +216,25 @@ returns t if it works, nil otherwise"
   (let ((recipe (get-ghash (master-recipes master) type-id)))
     (if recipe
         (handler-case
-            (progn
+            (let ((worker-id (determine-worker-for-node master type-id)))
               (send-msg (master-outbound-socket master) *mmop-v0*
-                        (mmop-m:make-start-node-v0
-                         (determine-worker-for-node master type-id) recipe))
+                        (mmop-m:make-start-node-v0 worker-id recipe))
+              (atomic
+               (let ((val (get-ghash
+                           (worker-info-outstanding-request-counts
+                            (get-ghash (master-workers master) worker-id))
+                           type-id 0)))
+                 (setf (get-ghash
+                        (worker-info-outstanding-request-counts
+                         (get-ghash (master-workers master) worker-id))
+                        type-id)
+                       (1+ val))))
               t)
           (mmop-error (c)
-            (progn (v:error :master.handler
-                            "could not send start node message (mmop version: ~a): ~a"
-                            (mmop-error/version c) (mmop-error/message c))
-                   nil)))
+            (progn
+              (v:error :master.handler
+                       "could not send start node message (mmop version: ~a): ~a"
+                       (mmop-error/version c) (mmop-error/message c))
+              nil)))
         (progn (v:error :master.handler "could not find recipe type ~a" type-id)
                nil))))
