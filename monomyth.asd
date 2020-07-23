@@ -30,7 +30,7 @@
                :pzmq
                :uuid
                :iterate
-               :vom
+               :verbose
                :cl-rabbit
                :babel)
   :description "A distributed data processing library for CL"
@@ -47,7 +47,8 @@
                 ((:file "rmq-node")
                  (:file "rmq-node-recipe")
                  (:file "mmop")
-                 (:file "rmq-worker"))))
+                 (:file "rmq-worker")
+                 (:file "master"))))
   :description "Test system for monomyth"
   :perform (test-op (op c) (symbol-call :rove '#:run c)))
 

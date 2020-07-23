@@ -3,7 +3,7 @@
         :monomyth/rmq-node-recipe :monomyth/rmq-node :monomyth/node))
 (in-package :monomyth/communication-tests-worker/rmq-worker)
 
-(vom:config t :info)
+(v:output-here *terminal-io*)
 (defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
 
 (defun get-master-ip ()

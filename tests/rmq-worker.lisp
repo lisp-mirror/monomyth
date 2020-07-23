@@ -3,9 +3,15 @@
         :monomyth/rmq-node-recipe :monomyth/rmq-node :monomyth/node))
 (in-package :monomyth/tests/rmq-worker)
 
+(defparameter *test-process-time* 3)
+(defparameter queue-1 (format nil "process-test-~a-1" (get-universal-time)))
+(defparameter queue-2 (format nil "process-test-~a-2" (get-universal-time)))
+(defparameter queue-3 (format nil "process-test-~a-3" (get-universal-time)))
+(defparameter queue-4 (format nil "process-test-~a-4" (get-universal-time)))
+(defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
+(defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
 (defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
-
-(vom:config t :info)
+(v:output-here *terminal-io*)
 
 (teardown
  (let ((conn (setup-connection :host (uiop:getenv "TEST_RMQ"))))
@@ -13,6 +19,9 @@
      (queue-delete conn 1 *source-queue*)
      (queue-delete conn 1 *dest-queue*)
      (queue-delete conn 1 "TEST-fail")
+     (queue-delete conn 1 "TEST1-fail")
+     (queue-delete conn 1 "TEST2-fail")
+     (queue-delete conn 1 "TEST3-fail")
      (queue-delete conn 1 queue-1)
      (queue-delete conn 1 queue-2)
      (queue-delete conn 1 queue-3)
@@ -35,9 +44,6 @@
     (run-worker wrkr)
     (stop-worker wrkr)
     (pass "worker stopped")))
-
-(defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
-(defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
 
 (deftest worker-can-start-node
   (let ((recipe (build-rmq-node-recipe :test "#'(lambda (x) (format nil \"test ~a\" x))"
@@ -88,12 +94,6 @@
       (pass "worker stopped")))
 
   (skip "worker catches bad recipe type"))
-
-(defparameter *test-process-time* 3)
-(defparameter queue-1 (format nil "process-test-~a-1" (get-universal-time)))
-(defparameter queue-2 (format nil "process-test-~a-2" (get-universal-time)))
-(defparameter queue-3 (format nil "process-test-~a-3" (get-universal-time)))
-(defparameter queue-4 (format nil "process-test-~a-4" (get-universal-time)))
 
 (deftest worker-processes-data
   (testing "single node"

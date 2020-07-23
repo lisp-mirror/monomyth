@@ -174,12 +174,12 @@ return :success t with the :result if things go well"
             (progn (send-message node (rmq-node/fail-queue node) (rmq-message-body item))
                    (nack-message node item nil))
           (rabbitmq-library-error (c)
-            (vom:error "rmq-error- failed to place item (~d): ~a"
+            (v:error :node.event-loop "rmq-error- failed to place item (~d): ~a"
                        (rabbitmq-library-error/error-code c)
                        (rabbitmq-library-error/error-description c))
             (handler-case (nack-message node item t)
               (rabbitmq-library-error (c)
-                (vom:error "rmq-error- failed to nack item (~d): ~a"
+                (v:error :node.event-loop "rmq-error- failed to nack item (~d): ~a"
                            (rabbitmq-library-error/error-code c)
                            (rabbitmq-library-error/error-description c)))))))
       (error "unexpected step")))

@@ -2,7 +2,7 @@
   (:use :cl :rove :monomyth/node :monomyth/rmq-node :cl-mock :cl-rabbit))
 (in-package :monomyth/tests/rmq-node)
 
-(vom:config t :info)
+(v:output-here *terminal-io*)
 (defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
 (defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
 (defparameter *fail-queue* (format nil "test-fail-~d" (get-universal-time)))
