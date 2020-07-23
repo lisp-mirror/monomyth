@@ -94,6 +94,14 @@
    of the library it is using).
    Ideally, there would be one connection per server, not thread.
 
+** Master Server
+   Ultimately the master is responsible for the coordination of the Monomyth system,
+   which right now limits it to starting nodes and telling workers to shutdown.
+   The master server's state is limited to the recipes it knows and what it knows
+   about what node threads (denoted only by recipe type) are running on what workers.
+   At startup, the master starts ~n~ handler long lived threads that actually process
+   and respond to the MMOP messages the master receives.
+
 * MMOP
   MMOP is a protocol designed to run on top of ZeroMQ used by master and worker servers.
   Each MMOP message is a multipart ZeroMQ Message requiring the collection of multiple frames.
