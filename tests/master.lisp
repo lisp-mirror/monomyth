@@ -1,9 +1,33 @@
 (defpackage monomyth/tests/master
   (:use :cl :rove :monomyth/master :monomyth/mmop :monomyth/rmq-node-recipe :stmx.util
-        :monomyth/node-recipe))
+        :monomyth/node-recipe :monomyth/worker :cl-rabbit :monomyth/rmq-node :monomyth/node
+        :monomyth/rmq-worker))
 (in-package :monomyth/tests/master)
 
+(defparameter *test-process-time* 3)
+(defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
+(defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
+(defparameter queue-1 (format nil "process-test-~a-1" (get-universal-time)))
+(defparameter queue-2 (format nil "process-test-~a-2" (get-universal-time)))
+(defparameter queue-3 (format nil "process-test-~a-3" (get-universal-time)))
+(defparameter queue-4 (format nil "process-test-~a-4" (get-universal-time)))
+(defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
 (v:output-here *terminal-io*)
+
+(teardown
+  (let ((conn (setup-connection :host (uiop:getenv "TEST_RMQ"))))
+    (with-channel (conn 1)
+      (queue-delete conn 1 *source-queue*)
+      (queue-delete conn 1 *dest-queue*)
+      (queue-delete conn 1 queue-1)
+      (queue-delete conn 1 queue-2)
+      (queue-delete conn 1 queue-3)
+      (queue-delete conn 1 queue-4)
+      (queue-delete conn 1 "TEST1-fail")
+      (queue-delete conn 1 "TEST2-fail")
+      (queue-delete conn 1 "TEST3-fail")
+      (queue-delete conn 1 "TEST-fail"))
+    (destroy-connection conn)))
 
 (deftest start-stop
   (let ((master (start-master 4 55555)))
@@ -163,3 +187,169 @@
     (iter:iterate
       (iter:for (req running) in-hashtable expected-results)
       (ok (= running (get-ghash (worker-info-type-counts worker) req 0))))))
+
+(deftest process-data-rmq
+  (testing "one worker - one node"
+    (let ((work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
+                                    *source-queue* *dest-queue* *dest-queue*
+                                    :host *rmq-host*))
+          (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
+      (startup work-node nil)
+      (iter:iterate
+        (iter:for item in items)
+        (send-message work-node *source-queue* item))
+      (shutdown work-node)
+
+      (let* ((client-port 55555)
+             (recipe1 (build-rmq-node-recipe :test "#'(lambda (x) (format nil \"test ~a\" x))"
+                                             *source-queue* *dest-queue* 5))
+             (master (start-master 2 client-port))
+             (worker (build-rmq-worker :host *rmq-host*)))
+        (bt:make-thread #'(lambda ()
+                            (start-worker worker (format nil "tcp://localhost:~a" client-port))
+                            (run-worker worker)
+                            (stop-worker worker)
+                            (pass "worker-stopped")))
+
+        (sleep .1)
+        (add-recipe master recipe1)
+        (ok (ask-to-start-node master "TEST"))
+        (sleep *test-process-time*)
+        (ok (ask-to-shutdown-worker master (worker/name worker)))
+        (stop-master master))
+
+      (setf work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
+                                     *dest-queue* *dest-queue* *dest-queue*
+                                     :host *rmq-host*))
+      (startup work-node nil)
+      (labels ((get-msg-w-restart ()
+                 (handler-case (get-message work-node)
+                   (rabbitmq-error (c)
+                     (declare (ignore c))
+                     (sleep .1)
+                     (get-msg-w-restart)))))
+        (iter:iterate
+          (iter:for item in items)
+          (iter:for got = (get-msg-w-restart))
+          (ok (string= (rmq-message-body got) (format nil "test ~a" item)))
+          (ack-message work-node got))
+        (shutdown work-node))))
+
+  (testing "one worker - two nodes"
+    (let ((work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
+                                    *source-queue* queue-1 *dest-queue*
+                                    :host *rmq-host*))
+
+          (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
+      (startup work-node nil)
+      (iter:iterate
+        (iter:for item in items)
+        (send-message work-node queue-1 item))
+      (shutdown work-node)
+
+      (let* ((client-port 55555)
+             (recipe1 (build-rmq-node-recipe :test1 "#'(lambda (x) (format nil \"test1 ~a\" x))"
+                                             queue-1 queue-2 5))
+             (recipe2 (build-rmq-node-recipe :test2 "#'(lambda (x) (format nil \"test2 ~a\" x))"
+                                             queue-2 queue-3))
+             (master (start-master 2 client-port))
+             (worker (build-rmq-worker :host *rmq-host*)))
+        (bt:make-thread #'(lambda ()
+                            (start-worker worker (format nil "tcp://localhost:~a" client-port))
+                            (run-worker worker)
+                            (stop-worker worker)
+                            (pass "worker-stopped")))
+
+        (sleep .1)
+        (add-recipe master recipe1)
+        (add-recipe master recipe2)
+        (ok (ask-to-start-node master "TEST1"))
+        (ok (ask-to-start-node master "TEST2"))
+        (sleep *test-process-time*)
+        (ok (ask-to-shutdown-worker master (worker/name worker)))
+        (stop-master master))
+
+      (setf work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
+                                     queue-3 *dest-queue* *dest-queue*
+                                     :host *rmq-host*))
+      (startup work-node nil)
+      (labels ((get-msg-w-restart ()
+                 (handler-case (get-message work-node)
+                   (rabbitmq-error (c)
+                     (declare (ignore c))
+                     (sleep .1)
+                     (get-msg-w-restart)))))
+        (iter:iterate
+          (iter:for item in items)
+          (iter:for got = (get-msg-w-restart))
+          (ok (string= (rmq-message-body got) (format nil "test2 test1 ~a" item)))
+          (ack-message work-node got))
+        (shutdown work-node))))
+
+  (testing "two workers"
+    (let ((work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
+                                    *source-queue* queue-1 *dest-queue*
+                                    :host *rmq-host*))
+
+          (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
+      (startup work-node nil)
+      (iter:iterate
+        (iter:for item in items)
+        (send-message work-node queue-1 item))
+      (shutdown work-node)
+
+      (let* ((client-port 55555)
+             (recipe1 (build-rmq-node-recipe :test1 "#'(lambda (x) (format nil \"test1 ~a\" x))"
+                                             queue-1 queue-2 5))
+             (recipe2 (build-rmq-node-recipe :test2 "#'(lambda (x) (format nil \"test2 ~a\" x))"
+                                             queue-2 queue-3))
+             (recipe3 (build-rmq-node-recipe :test3 "#'(lambda (x) (format nil \"test3 ~a\" x))"
+                                             queue-3 queue-4 4))
+             (master (start-master 2 client-port))
+             (worker1 (build-rmq-worker :host *rmq-host*))
+             (worker2 (build-rmq-worker :host *rmq-host*)))
+        (bt:make-thread #'(lambda ()
+                            (start-worker worker1 (format nil "tcp://localhost:~a" client-port))
+                            (run-worker worker1)
+                            (stop-worker worker1)
+                            (pass "worker1-stopped")))
+        (bt:make-thread #'(lambda ()
+                            (start-worker worker2 (format nil "tcp://localhost:~a" client-port))
+                            (run-worker worker2)
+                            (stop-worker worker2)
+                            (pass "worker2-stopped")))
+
+        (sleep .1)
+        (add-recipe master recipe1)
+        (add-recipe master recipe2)
+        (add-recipe master recipe3)
+        (ok (ask-to-start-node master "TEST3"))
+        (ok (ask-to-start-node master "TEST3"))
+        (ok (ask-to-start-node master "TEST2"))
+        (ok (ask-to-start-node master "TEST1"))
+        (ok (ask-to-start-node master "TEST2"))
+        (sleep *test-process-time*)
+        (ok (ask-to-shutdown-worker master (worker/name worker1)))
+        (ok (ask-to-shutdown-worker master (worker/name worker2)))
+        (stop-master master))
+
+      (setf work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
+                                     queue-4 *dest-queue* *dest-queue*
+                                     :host *rmq-host*))
+      (startup work-node nil)
+
+      (let ((results (iter:iterate
+                       (iter:for item in items)
+                       (iter:collect (format nil "test3 test2 test1 ~a" item)))))
+        (labels ((get-msg-w-restart ()
+                   (handler-case (get-message work-node)
+                     (rabbitmq-error (c)
+                       (declare (ignore c))
+                       (sleep .1)
+                       (get-msg-w-restart)))))
+          (iter:iterate
+            (iter:for item in items)
+            (iter:for got = (get-msg-w-restart))
+            (ok (member (rmq-message-body got) results :test #'string=))
+            (ack-message work-node got))
+          (shutdown work-node))))))

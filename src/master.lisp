@@ -9,7 +9,8 @@
            worker-info-type-counts
            worker-info-outstanding-request-counts
            add-recipe
-           ask-to-start-node))
+           ask-to-start-node
+           ask-to-shutdown-worker))
 (in-package :monomyth/master)
 
 (setf *arity-check-by-test-call* nil)
@@ -246,3 +247,22 @@ returns t if it works, nil otherwise"
               nil)))
         (progn (v:error :master.handler "could not find recipe type ~a" type-id)
                nil))))
+
+(defun ask-to-shutdown-worker (master worker-id)
+  "uses a master to tell a worker to shutdown via MMOP.
+No state in the master is currently changes, returns t if the call seems to have
+been sent, nil otherwise"
+  (if (get-ghash (master-workers master) worker-id)
+      (handler-case
+          (send-msg (master-outbound-socket master) *mmop-v0*
+                    (mmop-m:make-shutdown-worker-v0 worker-id))
+        (mmop-error (c)
+          (progn
+            (v:error :master.handler
+                     "could not send stop worker message (mmop version: ~a): ~a"
+                     (mmop-error/version c) (mmop-error/message c))
+            nil))
+        (:no-error (res) (declare (ignore res)) t))
+      (progn
+        (v:error :master "could not shutdown unrecognized worker ~a" worker-id)
+        nil)))

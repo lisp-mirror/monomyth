@@ -123,5 +123,5 @@ should be :place, :transform, or :pull if handle failure will take it")
            (sleep .1)))
      :name (format nil "~a-thread" (node/node-name node)))))
 
-(defmethod shutdown :after ((node node))
+(defmethod shutdown :before ((node node))
   (atomic (setf (node/running node) nil)))
