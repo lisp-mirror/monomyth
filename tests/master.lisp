@@ -142,7 +142,16 @@
 
             (test-resonses master client1-name c1-expected-results)
             (test-resonses master client2-name c2-expected-results)
-            (test-resonses master client3-name c3-expected-results)))))
+            (test-resonses master client3-name c3-expected-results)))
+
+        (testing "stop-worker"
+          (iter:iterate
+            (iter:for client in clients)
+            (ask-to-shutdown-worker master client))
+
+          (ok (typep (mmop-w:pull-worker-message client1) 'mmop-w:shutdown-worker-v0))
+          (ok (typep (mmop-w:pull-worker-message client2) 'mmop-w:shutdown-worker-v0))
+          (ok (typep (mmop-w:pull-worker-message client3) 'mmop-w:shutdown-worker-v0)))))
 
     (stop-master master)))
 

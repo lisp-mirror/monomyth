@@ -19,3 +19,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - rmq-worker startup/shutdown, node start up, and event loop.
 - Added test suites designed to test communication over a network.
 - rmq-nodes now support graceful shutdown and are wrapped by stmx for multi-threaded operations.
+- Added test suites designed to test multi machine processing.

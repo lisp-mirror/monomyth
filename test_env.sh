@@ -1,2 +1,3 @@
 export TEST_RMQ=localhost
 export TEST_MASTER_IP=localhost
+export TEST_PROCESSING_RMQ=localhost

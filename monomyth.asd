@@ -75,3 +75,31 @@
                  (:file "rmq-worker"))))
   :description "Test system for monomyth for inter machine communication, worker perspective"
   :perform (test-op (op c) (symbol-call :rove '#:run c)))
+
+(defsystem "monomyth/processing-tests-master"
+  :author "Paul Ricks"
+  :license "MPL 2.0"
+  :depends-on (:monomyth
+               :rove)
+  :components ((:module "processing-tests"
+                :components
+                ((:file "utils")
+                 (:file "master"
+                  :depends-on ("utils")))))
+  :description "Test system for monomyth for modeling actual data processing,
+master perspective"
+  :perform (test-op (op c) (symbol-call :rove '#:run c)))
+
+(defsystem "monomyth/processing-tests-worker"
+  :author "Paul Ricks"
+  :license "MPL 2.0"
+  :depends-on (:monomyth
+               :rove)
+  :components ((:module "processing-tests"
+                :components
+                ((:file "utils")
+                 (:file "worker"
+                  :depends-on ("utils")))))
+  :description "Test system for monomyth for modeling actual data processing,
+worker perspective"
+  :perform (test-op (op c) (symbol-call :rove '#:run c)))
