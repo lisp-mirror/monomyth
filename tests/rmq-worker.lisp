@@ -1,6 +1,8 @@
 (defpackage monomyth/tests/rmq-worker
   (:use :cl :rove :cl-rabbit :monomyth/rmq-worker :monomyth/worker :monomyth/mmop
-        :monomyth/rmq-node-recipe :monomyth/rmq-node :monomyth/node))
+        :monomyth/rmq-node-recipe :monomyth/rmq-node :monomyth/node :stmx
+        :monomyth/node-recipe)
+  (:shadow :closer-mop))
 (in-package :monomyth/tests/rmq-worker)
 
 (defparameter *test-process-time* 3)
@@ -12,6 +14,27 @@
 (defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
 (defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
 (v:output-here *terminal-io*)
+
+(transactional
+    (defclass testing-node (rmq-node) ()))
+
+(defclass test-recipe (rmq-node-recipe) ())
+
+(defun build-test-node (name source dest fail size host)
+  (make-instance 'testing-node :name name :source source :dest dest :fail fail
+                               :host *rmq-host* :batch-size size :type :test
+                               :conn (setup-connection :host host)))
+
+(defun build-test-recipe (source dest)
+  (make-instance 'test-recipe :source source :dest dest :type :test))
+
+(defmethod transform-fn ((node testing-node) item)
+  (format nil "test ~a" item))
+
+(defmethod build-node ((worker rmq-worker) (recipe test-recipe))
+  (build-test-node (name-node recipe) (rmq-node-recipe/source-queue recipe)
+                   (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
+                   (node-recipe/batch-size recipe) (rmq-worker/host worker)))
 
 (teardown
  (let ((conn (setup-connection :host (uiop:getenv "TEST_RMQ"))))
@@ -46,8 +69,7 @@
     (pass "worker stopped")))
 
 (deftest worker-can-start-node
-  (let ((recipe (build-rmq-node-recipe :test "#'(lambda (x) (format nil \"test ~a\" x))"
-                                       *source-queue* *dest-queue*)))
+  (let ((recipe (build-test-recipe *source-queue* *dest-queue*)))
     (bt:make-thread
      #'(lambda ()
          (pzmq:with-context nil
@@ -67,9 +89,13 @@
       (stop-worker wrkr)
       (pass "worker stopped"))))
 
-(deftest worker-catches-bad-fn
-  (let ((recipe (build-rmq-node-recipe :test "#'(lambda (x) (format nil \"test ~a\" x)"
-                                       *source-queue* *dest-queue*)))
+(defclass test-bad-recipe (rmq-node-recipe) ())
+
+(defun build-bad-test-recipe ()
+  (make-instance 'test-bad-recipe :source "doesnt-matter" :dest "at-all" :type :test))
+
+(deftest worker-catches-bad-recipe
+  (let ((recipe (build-bad-test-recipe)))
     (bt:make-thread
      #'(lambda ()
          (pzmq:with-context nil
@@ -83,25 +109,88 @@
                  (ok (eq (type-of res-msg) 'mmop-m:start-node-failure-v0))
                  (ok (string= (mmop-m:start-node-failure-v0-type res-msg) "TEST"))
                  (ok (string= (mmop-m:start-node-failure-v0-reason-cat res-msg)
-                              "function read"))
+                              "recipe build"))
                  (ok (string= (mmop-m:start-node-failure-v0-reason-msg res-msg)
-                              "end of file (mismatched forms)")))
+                              "worker cannot handle recipe type")))
                (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0 id)))))))
     (let ((wrkr (build-rmq-worker :host *rmq-host*)))
       (start-worker wrkr "tcp://localhost:55555")
       (run-worker wrkr)
       (stop-worker wrkr)
-      (pass "worker stopped")))
+      (pass "worker stopped"))))
 
-  (skip "worker catches bad recipe type"))
+(transactional
+    (defclass testing-node1 (rmq-node) ()))
+
+(defclass test-recipe1 (rmq-node-recipe) ())
+
+(defun build-test-node1 (name source dest fail size host)
+  (make-instance 'testing-node1 :name name :source source :dest dest :fail fail
+                                :host *rmq-host* :batch-size size :type :test
+                                :conn (setup-connection :host host)))
+
+(defun build-test-recipe1 (source dest batch)
+  (make-instance 'test-recipe1 :source source :dest dest :batch-size batch
+                               :type :test1))
+
+(defmethod transform-fn ((node testing-node1) item)
+  (format nil "test1 ~a" item))
+
+(defmethod build-node ((worker rmq-worker) (recipe test-recipe1))
+  (build-test-node1 (name-node recipe) (rmq-node-recipe/source-queue recipe)
+                    (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
+                    (node-recipe/batch-size recipe) (rmq-worker/host worker)))
+
+(transactional
+    (defclass testing-node2 (rmq-node) ()))
+
+(defclass test-recipe2 (rmq-node-recipe) ())
+
+(defun build-test-node2 (name source dest fail size host)
+  (make-instance 'testing-node2 :name name :source source :dest dest :fail fail
+                                :host *rmq-host* :batch-size size :type :test
+                                :conn (setup-connection :host host)))
+
+(defun build-test-recipe2 (source dest batch)
+  (make-instance 'test-recipe2 :source source :dest dest :batch-size batch
+                               :type :test2))
+
+(defmethod transform-fn ((node testing-node2) item)
+  (format nil "test2 ~a" item))
+
+(defmethod build-node ((worker rmq-worker) (recipe test-recipe2))
+  (build-test-node2 (name-node recipe) (rmq-node-recipe/source-queue recipe)
+                    (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
+                    (node-recipe/batch-size recipe) (rmq-worker/host worker)))
+
+(transactional
+    (defclass testing-node3 (rmq-node) ()))
+
+(defclass test-recipe3 (rmq-node-recipe) ())
+
+(defun build-test-node3 (name source dest fail size host)
+  (make-instance 'testing-node3 :name name :source source :dest dest :fail fail
+                               :host *rmq-host* :batch-size size :type :test
+                               :conn (setup-connection :host host)))
+
+(defun build-test-recipe3 (source dest batch)
+  (make-instance 'test-recipe3 :source source :dest dest :batch-size batch
+                               :type :test3))
+
+(defmethod transform-fn ((node testing-node3) item)
+  (format nil "test3 ~a" item))
+
+(defmethod build-node ((worker rmq-worker) (recipe test-recipe3))
+  (build-test-node3 (name-node recipe) (rmq-node-recipe/source-queue recipe)
+                    (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
+                    (node-recipe/batch-size recipe) (rmq-worker/host worker)))
 
 (deftest worker-processes-data
   (testing "single node"
-    (let ((recipe1 (build-rmq-node-recipe :test "#'(lambda (x) (format nil \"test ~a\" x))"
-                                          *source-queue* *dest-queue* 5))
-          (work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
-                                    *source-queue* *dest-queue* *dest-queue*
-                                    :host *rmq-host*))
+    (let ((recipe1 (build-test-recipe *source-queue* *dest-queue*))
+          (work-node
+            (build-test-node (format nil "worknode-~d" (get-universal-time))
+                             *source-queue* *dest-queue* *dest-queue* 10 *rmq-host*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
@@ -128,9 +217,9 @@
         (stop-worker wrkr)
         (pass "worker stopped"))
 
-      (setf work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
-                                     *dest-queue* *dest-queue* *dest-queue*
-                                     :host *rmq-host*))
+      (setf work-node
+            (build-test-node (format nil "worknode-~d" (get-universal-time))
+                             *dest-queue* *dest-queue* *dest-queue* 10 *rmq-host*))
       (startup work-node nil)
 
       (labels ((get-msg-w-restart ()
@@ -147,14 +236,12 @@
         (shutdown work-node))))
 
   (testing "multiple nodes"
-    (let ((recipe1 (build-rmq-node-recipe :test1 "#'(lambda (x) (format nil \"test1 ~a\" x))"
-                                          queue-1 queue-2 5))
-          (recipe2 (build-rmq-node-recipe :test2 "#'(lambda (x) (format nil \"test2 ~a\" x))"
-                                          queue-2 queue-3))
-          (recipe3 (build-rmq-node-recipe :test3 "#'(lambda (x) (format nil \"test3 ~a\" x))"
-                                          queue-3 queue-4 4))
-          (work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
-                                    queue-1 queue-2 queue-3 :host *rmq-host*))
+    (let ((recipe1 (build-test-recipe1 queue-1 queue-2 5))
+          (recipe2 (build-test-recipe2 queue-2 queue-3 10))
+          (recipe3 (build-test-recipe3 queue-3 queue-4 4))
+          (work-node
+            (build-test-node (format nil "worknode-~d" (get-universal-time))
+                             queue-1 queue-2 queue-3 10 *rmq-host*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
@@ -189,8 +276,8 @@
         (stop-worker wrkr)
         (pass "worker stopped"))
 
-      (setf work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
-                                     queue-4 queue-4 queue-4 :host *rmq-host*))
+      (setf work-node (build-test-node (format nil "worknode-~d" (get-universal-time))
+                                       queue-4 queue-4 queue-4 10 *rmq-host*))
       (startup work-node nil)
       (labels ((get-msg-w-restart ()
                  (handler-case (get-message work-node)

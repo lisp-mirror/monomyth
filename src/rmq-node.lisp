@@ -1,8 +1,8 @@
 (defpackage monomyth/rmq-node
   (:use :cl :monomyth/node :cl-rabbit :stmx)
   (:shadow :closer-mop)
-  (:export setup-connection
-           make-rmq-node
+  (:export rmq-node
+           setup-connection
            build-rmq-message
            rmq-message-body
            rmq-message-delivery-tag
@@ -68,19 +68,6 @@ defaults are the local rabbit-mq defaults"
      (socket-open (tcp-socket-new conn) host port)
      (login-sasl-plain conn vhost username password)
      conn)))
-
-(defun make-rmq-node
-    (transform-fn type source-queue dest-queue fail-queue
-     &key (host "localhost") (port 5672) (username "guest") (password "guest") (vhost "/")
-       name exchange batch-size)
-  (let ((args `(rmq-node :transform-fn ,transform-fn :type ,type
-                         :conn ,(setup-connection :host host :port port :username username
-                                                  :password password :vhost vhost)
-                         :source ,source-queue :dest ,dest-queue :fail ,fail-queue)))
-    (if name (setf args (append args `(:name ,name))))
-    (if batch-size (setf args (append args `(:batch-size ,batch-size))))
-    (if exchange (setf args (append args `(:exchange ,exchange))))
-    (apply #'make-instance args)))
 
 (defmethod startup ((node rmq-node) &optional build-worker-thread)
   "opens a channel using the nodes connections after setting up the socket.
@@ -148,7 +135,7 @@ return :success t with the :result if things go well"
         (iter:finally (return items))
         (iter:for item in pulled)
         (iter:collect (build-rmq-message
-                       :body (funcall (node/trans-fn node) (rmq-message-body item))
+                       :body (transform-fn node (rmq-message-body item))
                        :delivery-tag (rmq-message-delivery-tag item))
           into items))
     (error (c)

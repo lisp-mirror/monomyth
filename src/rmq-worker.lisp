@@ -1,7 +1,12 @@
 (defpackage monomyth/rmq-worker
   (:use :cl :monomyth/worker :monomyth/rmq-node :monomyth/rmq-node-recipe
    :monomyth/node-recipe :monomyth/node :cl-rabbit)
-  (:export build-rmq-worker))
+  (:export rmq-worker
+           rmq-worker/host
+           rmq-worker/port
+           rmq-worker/username
+           rmq-worker/password
+           build-rmq-worker))
 (in-package :monomyth/rmq-worker)
 
 (defclass rmq-worker (worker)
@@ -25,15 +30,3 @@
 (defun build-rmq-worker
     (&key (host "localhost") (port 5672) (username "guest") (password "guest"))
   (make-instance 'rmq-worker :host host :port port :username username :password password))
-
-(defmethod build-node ((worker rmq-worker) (recipe rmq-node-recipe))
-  (make-rmq-node (eval (read-from-string (node-recipe/transform-fn recipe)))
-                 (node-recipe/type recipe)
-                 (rmq-node-recipe/source-queue recipe)
-                 (rmq-node-recipe/dest-queue recipe)
-                 (name-fail-queue recipe)
-                 :host (rmq-worker/host worker)
-                 :port (rmq-worker/port worker)
-                 :username (rmq-worker/username worker)
-                 :password (rmq-worker/password worker)
-                 :batch-size (node-recipe/batch-size recipe)))
