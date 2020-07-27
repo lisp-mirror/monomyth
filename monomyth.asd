@@ -44,11 +44,16 @@
                :cl-mock)
   :components ((:module "tests"
                 :components
-                ((:file "rmq-node")
+                ((:file "utils")
+                 (:file "rmq-node"
+                  :depends-on ("utils"))
                  (:file "rmq-node-recipe")
-                 (:file "mmop")
-                 (:file "rmq-worker")
-                 (:file "master"))))
+                 (:file "mmop"
+                  :depends-on ("utils"))
+                 (:file "rmq-worker"
+                  :depends-on ("utils"))
+                 (:file "master"
+                  :depends-on ("utils")))))
   :description "Test system for monomyth"
   :perform (test-op (op c) (symbol-call :rove '#:run c)))
 
@@ -56,6 +61,7 @@
   :author "Paul Ricks"
   :license "MPL 2.0"
   :depends-on (:monomyth
+               :monomyth/tests
                :rove)
   :components ((:module "communication-tests/master"
                 :components
@@ -68,6 +74,7 @@
   :author "Paul Ricks"
   :license "MPL 2.0"
   :depends-on (:monomyth
+               :monomyth/tests
                :rove)
   :components ((:module "communication-tests/worker"
                 :components

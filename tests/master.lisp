@@ -1,7 +1,7 @@
 (defpackage monomyth/tests/master
   (:use :cl :rove :monomyth/master :monomyth/mmop :monomyth/rmq-node-recipe :stmx.util
         :monomyth/node-recipe :monomyth/worker :cl-rabbit :monomyth/rmq-node :monomyth/node
-   :monomyth/rmq-worker :stmx)
+   :monomyth/rmq-worker :stmx :monomyth/tests/utils)
   (:shadow :closer-mop))
 (in-package :monomyth/tests/master)
 
@@ -36,48 +36,6 @@
     (stop-master master)
     (pass "master-stopped"))
   (skip "delete threads"))
-
-(transactional
-    (defclass testing-node1 (rmq-node) ()))
-
-(defclass test-recipe1 (rmq-node-recipe) ())
-
-(defun build-test-node1 (name source dest fail size host)
-  (make-instance 'testing-node1 :name name :source source :dest dest :fail fail
-                                :host *rmq-host* :batch-size size :type :test1
-                                :conn (setup-connection :host host)))
-
-(defun build-test-recipe1 (source dest batch)
-  (make-instance 'test-recipe1 :source source :dest dest :type :test1 :batch-size batch))
-
-(defmethod transform-fn ((node testing-node1) item)
-  (format nil "test1 ~a" item))
-
-(defmethod build-node ((worker rmq-worker) (recipe test-recipe1))
-  (build-test-node1 (name-node recipe) (rmq-node-recipe/source-queue recipe)
-                    (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
-                    (node-recipe/batch-size recipe) (rmq-worker/host worker)))
-
-(transactional
-    (defclass testing-node2 (rmq-node) ()))
-
-(defclass test-recipe2 (rmq-node-recipe) ())
-
-(defun build-test-node2 (name source dest fail size host)
-  (make-instance 'testing-node2 :name name :source source :dest dest :fail fail
-                                :host *rmq-host* :batch-size size :type :test2
-                                :conn (setup-connection :host host)))
-
-(defun build-test-recipe2 (source dest batch)
-  (make-instance 'test-recipe2 :source source :dest dest :type :test2 :batch-size batch))
-
-(defmethod transform-fn ((node testing-node2) item)
-  (format nil "test2 ~a" item))
-
-(defmethod build-node ((worker rmq-worker) (recipe test-recipe2))
-  (build-test-node2 (name-node recipe) (rmq-node-recipe/source-queue recipe)
-                    (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
-                    (node-recipe/batch-size recipe) (rmq-worker/host worker)))
 
 (deftest can-handle-worker-messages
   (let* ((master (start-master 2 55555))
@@ -226,49 +184,6 @@
     (iter:iterate
       (iter:for (req running) in-hashtable expected-results)
       (ok (= running (get-ghash (worker-info-type-counts worker) req 0))))))
-
-(transactional
-    (defclass testing-node (rmq-node) ()))
-
-(defclass test-recipe (rmq-node-recipe) ())
-
-(defun build-test-node (name source dest fail size host)
-  (make-instance 'testing-node :name name :source source :dest dest :fail fail
-                               :host *rmq-host* :batch-size size :type :test
-                               :conn (setup-connection :host host)))
-
-(defun build-test-recipe (source dest)
-  (make-instance 'test-recipe :source source :dest dest :type :test))
-
-(defmethod transform-fn ((node testing-node) item)
-  (format nil "test ~a" item))
-
-(defmethod build-node ((worker rmq-worker) (recipe test-recipe))
-  (build-test-node (name-node recipe) (rmq-node-recipe/source-queue recipe)
-                   (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
-                   (node-recipe/batch-size recipe) (rmq-worker/host worker)))
-
-(transactional
-    (defclass testing-node3 (rmq-node) ()))
-
-(defclass test-recipe3 (rmq-node-recipe) ())
-
-(defun build-test-node3 (name source dest fail size host)
-  (make-instance 'testing-node3 :name name :source source :dest dest :fail fail
-                                :host *rmq-host* :batch-size size :type :test3
-                                :conn (setup-connection :host host)))
-
-(defun build-test-recipe3 (source dest batch)
-  (make-instance 'test-recipe3 :source source :dest dest :batch-size batch
-                               :type :test3))
-
-(defmethod transform-fn ((node testing-node3) item)
-  (format nil "test3 ~a" item))
-
-(defmethod build-node ((worker rmq-worker) (recipe test-recipe3))
-  (build-test-node3 (name-node recipe) (rmq-node-recipe/source-queue recipe)
-                    (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
-                    (node-recipe/batch-size recipe) (rmq-worker/host worker)))
 
 (deftest process-data-rmq
   (testing "one worker - one node"

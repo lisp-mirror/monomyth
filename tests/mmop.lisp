@@ -1,5 +1,6 @@
 (defpackage monomyth/tests/mmop
-  (:use :cl :rove :monomyth/mmop :monomyth/rmq-node-recipe :monomyth/node-recipe))
+  (:use :cl :rove :monomyth/mmop :monomyth/rmq-node-recipe :monomyth/node-recipe
+        :monomyth/tests/utils))
 (in-package :monomyth/tests/mmop)
 
 (deftest to-router

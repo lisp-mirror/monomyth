@@ -76,7 +76,7 @@
 
   (testing "start-node"
     (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
-          (recipe (build-rmq-node-recipe :test "#'(lambda (x) (1+ x))" "test-s" "test-d")))
+          (recipe (make-instance 'rmq-node-recipe :type :test :source "test-s" :dest "test-d")))
       (pzmq:with-context nil
         (pzmq:with-socket server :dealer
           (pzmq:setsockopt server :identity client-name)
@@ -88,7 +88,6 @@
             (ok (string= (mmop-w:start-node-v0-type res) "TEST"))
             (let ((got-res (mmop-w:start-node-v0-recipe res)))
               (ok (eq (node-recipe/type got-res) (node-recipe/type recipe)))
-              (ok (string= (node-recipe/transform-fn got-res) (node-recipe/transform-fn recipe)))
               (ok (string= (rmq-node-recipe/source-queue got-res) (rmq-node-recipe/source-queue recipe)))
               (ok (string= (rmq-node-recipe/dest-queue got-res) (rmq-node-recipe/dest-queue recipe)))))))))
 
