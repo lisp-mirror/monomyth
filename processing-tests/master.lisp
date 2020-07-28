@@ -17,25 +17,16 @@
 (defun calculate-batch-size ()
   (+ *batch-min* (random *batch-range*)))
 
-(defparameter *fn1* "#'(lambda (x) (format nil \"~a~a\" x 18))")
-(defparameter *fn2* "#'(lambda (x) (coerce (remove-if #'alpha-char-p (coerce x 'list)) 'string))")
-(defparameter *fn3* "#'(lambda (x) (format nil \"~a\" (* (parse-integer x) 7)))")
-(defparameter *fn4* "#'(lambda (x) (format nil \"test ~a\" x))")
-
 (defparameter *queue1* (format nil "processing-queue-1-~a" (get-universal-time)))
 (defparameter *queue2* (format nil "processing-queue-2-~a" (get-universal-time)))
 (defparameter *queue3* (format nil "processing-queue-3-~a" (get-universal-time)))
 (defparameter *queue4* (format nil "processing-queue-4-~a" (get-universal-time)))
 (defparameter *queue5* (format nil "processing-queue-5-~a" (get-universal-time)))
 
-(defparameter *recipe1* (build-rmq-node-recipe :test1 *fn1* *queue1* *queue2*
-                                               (calculate-batch-size)))
-(defparameter *recipe2* (build-rmq-node-recipe :test2 *fn2* *queue2* *queue3*
-                                               (calculate-batch-size)))
-(defparameter *recipe3* (build-rmq-node-recipe :test3 *fn3* *queue3* *queue4*
-                                               (calculate-batch-size)))
-(defparameter *recipe4* (build-rmq-node-recipe :test4 *fn4* *queue4* *queue5*
-                                               (calculate-batch-size)))
+(defparameter *recipe1* (build-test-recipe1 *queue1* *queue2*))
+(defparameter *recipe2* (build-test-recipe2 *queue2* *queue3*))
+(defparameter *recipe3* (build-test-recipe3 *queue3* *queue4*))
+(defparameter *recipe4* (build-test-recipe4 *queue4* *queue5*))
 (defparameter *recipes* `(,*recipe1* ,*recipe2* ,*recipe3* ,*recipe4*))
 
 (teardown
@@ -54,8 +45,8 @@
       (loop repeat length do (princ (random 36) stream)))))
 
 (defun send-test-messages ()
-  (let ((work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
-                                  *queue1* *queue1* *queue1* :host *rmq-host*)))
+  (let ((work-node (build-test-node (format nil "worknode-~d" (get-universal-time))
+                                    *queue1* *queue1* *queue1* 10)))
     (startup work-node nil)
     (let ((msgs (iter:iterate
                   (iter:repeat *number-of-test-msgs*)
@@ -82,8 +73,8 @@
   (let* ((master (start-master *master-threads* *mmop-port*))
          (test-msgs (send-test-messages))
          (expected-result (mapcar #'calculate-result-messge test-msgs))
-         (work-node (make-rmq-node nil (format nil "worknode-~d" (get-universal-time))
-                                   *queue5* *queue1* *queue1* :host *rmq-host*)))
+         (work-node (build-test-node (format nil "worknode-~d" (get-universal-time))
+                                     *queue5* *queue1* *queue1* 10)))
     (format t "Ready to start tests?~%")
     (read-line)
 
