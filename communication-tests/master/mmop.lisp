@@ -51,7 +51,7 @@
         (ok (typep (mmop-m:pull-master-message client) 'mmop-m:worker-ready-v0)))))
 
   (testing "start-node"
-    (let ((recipe (build-rmq-node-recipe :test "#'(lambda (x) (1+ x))" "test-s" "test-d")))
+    (let ((recipe (make-instance 'rmq-node-recipe :type :test :source "test-s" :dest "test-d")))
       (pzmq:with-context nil
         (pzmq:with-socket client :router
           (pzmq:bind client "tcp://*:55555")

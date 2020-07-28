@@ -4,14 +4,15 @@
   (:export startup
            pull-items
            transform-items
+           transform-fn
            place-items
            handle-failure
            run-iteration
            shutdown
            node
            node/node-name
-           node/trans-fn
            node/batch-size
+           node/type
            node-error
            node-error/step
            node-error/items))
@@ -28,6 +29,9 @@ should return a plist with one of the slots as :success"))
 (defgeneric transform-items (node pulled)
   (:documentation "extracts the items from the pull step (provided it was successful)
 and applies the transform function to each one"))
+
+(defgeneric transform-fn (node item)
+  (:documentation "the core transform function"))
 
 (defgeneric place-items (node result)
   (:documentation "places the finished items on the message bus
@@ -64,13 +68,6 @@ the result is the full payload sent by the last step"))
                    :transactional nil
                    :initform 10
                    :documentation "number of items to pull in pull-items at a time")
-       (transform-fn :reader node/trans-fn
-                     :initarg :transform-fn
-                     :transactional nil
-                     :initform (error "transform function is required")
-                     :documentation "transforms the pulled items
-takes the entire payload returned by pull-items
-should return a plist with one of the slots as :success and the new items under :items")
        (running :accessor node/running
                 :initform t
                 :documentation "transactional condition that allows for safe shutdown"))
@@ -97,7 +94,7 @@ should be :place, :transform, or :pull if handle failure will take it")
   (handler-case
       (iter:iterate
         (iter:for item in pulled)
-        (iter:collect (funcall (node/trans-fn node) item)))
+        (iter:collect (transform-fn item)))
     (error (c)
       (error 'node-error :step :transform :items pulled
              :message (format nil "~a" c)))

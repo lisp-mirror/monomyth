@@ -65,12 +65,6 @@ it should be okay start a node"))
 
                ((start-node-v0 type recipe)
                 (handler-case (build-node worker recipe)
-                  (end-of-file (e)
-                    (declare (ignore e))
-                    (send-msg (worker/socket worker) (worker/mmop-version worker)
-                              (mmop-w:make-start-node-failure-v0
-                               type "function read" "end of file (mismatched forms)"))
-                    t)
                   (sb-pcl::no-applicable-method-error (e)
                     (declare (ignore e))
                     (send-msg (worker/socket worker) (worker/mmop-version worker)
