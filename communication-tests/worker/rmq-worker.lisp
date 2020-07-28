@@ -1,10 +1,16 @@
 (defpackage monomyth/communication-tests-worker/rmq-worker
   (:use :cl :rove :cl-rabbit :monomyth/rmq-worker :monomyth/worker :monomyth/mmop
-        :monomyth/rmq-node-recipe :monomyth/rmq-node :monomyth/node))
+        :monomyth/rmq-node-recipe :monomyth/rmq-node :monomyth/node
+        :monomyth/tests/utils))
 (in-package :monomyth/communication-tests-worker/rmq-worker)
 
 (v:output-here *terminal-io*)
 (defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
+
+(defclass test-bad-recipe (rmq-node-recipe) ())
+
+(defun build-bad-test-recipe ()
+  (make-instance 'test-bad-recipe :source "doesnt-matter" :dest "at-all" :type :test))
 
 (defun get-master-ip ()
   (let ((env-value (uiop:getenv "TEST_MASTER_IP")))

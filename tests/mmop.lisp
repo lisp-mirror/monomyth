@@ -1,5 +1,6 @@
 (defpackage monomyth/tests/mmop
-  (:use :cl :rove :monomyth/mmop :monomyth/rmq-node-recipe :monomyth/node-recipe))
+  (:use :cl :rove :monomyth/mmop :monomyth/rmq-node-recipe :monomyth/node-recipe
+        :monomyth/tests/utils))
 (in-package :monomyth/tests/mmop)
 
 (deftest to-router
@@ -87,7 +88,8 @@
   (testing "start-node"
     (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
           (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
-          (recipe (build-rmq-node-recipe :test "#'(lambda (x) (1+ x))" "test-s" "test-d")))
+          (recipe (make-instance 'rmq-node-recipe :dest "test-d" :source "test-s"
+                                                  :type :test :batch-size 7)))
       (pzmq:with-context nil
         (pzmq:with-sockets ((server :router) (client :dealer))
           (pzmq:setsockopt server :identity server-name)
@@ -103,7 +105,6 @@
             (ok (string= (mmop-w:start-node-v0-type res) "TEST"))
             (let ((got-res (mmop-w:start-node-v0-recipe res)))
               (ok (eq (node-recipe/type got-res) (node-recipe/type recipe)))
-              (ok (string= (node-recipe/transform-fn got-res) (node-recipe/transform-fn recipe)))
               (ok (string= (rmq-node-recipe/source-queue got-res) (rmq-node-recipe/source-queue recipe)))
               (ok (string= (rmq-node-recipe/dest-queue got-res) (rmq-node-recipe/dest-queue recipe)))))))))
 
