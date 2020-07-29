@@ -6,6 +6,8 @@
 
 (v:output-here *terminal-io*)
 (defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
+(defparameter *rmq-user* (uiop:getenv "TEST_RMQ_DEFAULT_USER"))
+(defparameter *rmq-pass* (uiop:getenv "TEST_RMQ_DEFAULT_PASS"))
 
 (defclass test-bad-recipe (rmq-node-recipe) ())
 
@@ -22,21 +24,21 @@
 (defparameter *master-uri* (format nil "tcp://~a:55555" (get-master-ip)))
 
 (deftest worker-starts-shutdown
-  (let ((wrkr (build-rmq-worker :host *rmq-host*)))
+  (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
     (start-worker wrkr *master-uri*)
     (run-worker wrkr)
     (stop-worker wrkr)
     (pass "worker stopped")))
 
 (deftest worker-can-start-node
-  (let ((wrkr (build-rmq-worker :host *rmq-host*)))
+  (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
     (start-worker wrkr *master-uri*)
     (run-worker wrkr)
     (stop-worker wrkr)
     (pass "worker stopped")))
 
 (deftest worker-catches-bad-fn
-  (let ((wrkr (build-rmq-worker :host *rmq-host*)))
+  (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
     (start-worker wrkr *master-uri*)
     (run-worker wrkr)
     (stop-worker wrkr)
@@ -45,14 +47,14 @@
 
 (deftest worker-processes-data
   (testing "single node"
-    (let ((wrkr (build-rmq-worker :host *rmq-host*)))
+    (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
       (start-worker wrkr *master-uri*)
       (run-worker wrkr)
       (stop-worker wrkr)
       (pass "worker stopped")))
 
   (testing "worker processes data - multiple nodes"
-    (let ((wrkr (build-rmq-worker :host *rmq-host*)))
+    (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
       (start-worker wrkr *master-uri*)
       (run-worker wrkr)
       (stop-worker wrkr)

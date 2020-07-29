@@ -4,6 +4,8 @@
   (:shadow :closer-mop)
   (:export *mmop-port*
            *rmq-host*
+           *rmq-user*
+           *rmq-pass*
            build-test-node
            testing-node1
            testing-node2
@@ -20,25 +22,31 @@
 (in-package :monomyth/processing-tests/utils)
 
 (defparameter *rmq-host* (uiop:getenv "TEST_PROCESSING_RMQ"))
+(defparameter *rmq-user* (uiop:getenv "TEST_RMQ_DEFAULT_USER"))
+(defparameter *rmq-pass* (uiop:getenv "TEST_RMQ_DEFAULT_PASS"))
 (defparameter *mmop-port* 55555)
 
 (transactional
     (defclass testing-node (rmq-node) ()))
 
-(defun build-test-node (name source dest fail size)
+(defun build-test-node (name source dest fail size host user pass)
   (make-instance 'testing-node :name name :source source :dest dest :fail fail
                                :batch-size size :type :test
-                               :conn (setup-connection :host *rmq-host*)))
+                               :conn (setup-connection :host host
+                                                       :username user
+                                                       :password pass)))
 
 (transactional
     (defclass testing-node1 (rmq-node) ()))
 
 (defclass test-recipe1 (rmq-node-recipe) ())
 
-(defun build-test-node1 (name source dest fail size)
+(defun build-test-node1 (name source dest fail size host user pass)
   (make-instance 'testing-node1 :name name :source source :dest dest :fail fail
                                 :batch-size size :type :test1
-                                :conn (setup-connection :host *rmq-host*)))
+                                :conn (setup-connection :host host
+                                                        :username user
+                                                        :password pass)))
 
 (defun build-test-recipe1 (source dest)
   (make-instance 'test-recipe1 :source source :dest dest :type :test1))
@@ -49,17 +57,20 @@
 (defmethod build-node ((worker rmq-worker) (recipe test-recipe1))
   (build-test-node1 (name-node recipe) (rmq-node-recipe/source-queue recipe)
                     (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
-                    (node-recipe/batch-size recipe)))
+                    (node-recipe/batch-size recipe) (rmq-worker/host worker)
+                    (rmq-worker/username worker) (rmq-worker/password worker)))
 
 (transactional
     (defclass testing-node2 (rmq-node) ()))
 
 (defclass test-recipe2 (rmq-node-recipe) ())
 
-(defun build-test-node2 (name source dest fail size)
+(defun build-test-node2 (name source dest fail size host user pass)
   (make-instance 'testing-node2 :name name :source source :dest dest :fail fail
                                 :batch-size size :type :test2
-                                :conn (setup-connection :host *rmq-host*)))
+                                :conn (setup-connection :host host
+                                                        :username user
+                                                        :password pass)))
 
 (defun build-test-recipe2 (source dest)
   (make-instance 'test-recipe2 :source source :dest dest :type :test2))
@@ -70,17 +81,20 @@
 (defmethod build-node ((worker rmq-worker) (recipe test-recipe2))
   (build-test-node2 (name-node recipe) (rmq-node-recipe/source-queue recipe)
                     (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
-                    (node-recipe/batch-size recipe)))
+                    (node-recipe/batch-size recipe) (rmq-worker/host worker)
+                    (rmq-worker/username worker) (rmq-worker/password worker)))
 
 (transactional
     (defclass testing-node3 (rmq-node) ()))
 
 (defclass test-recipe3 (rmq-node-recipe) ())
 
-(defun build-test-node3 (name source dest fail size)
+(defun build-test-node3 (name source dest fail size host user pass)
   (make-instance 'testing-node3 :name name :source source :dest dest :fail fail
                                 :batch-size size :type :test3
-                                :conn (setup-connection :host *rmq-host*)))
+                                :conn (setup-connection :host host
+                                                        :username user
+                                                        :password pass)))
 
 (defun build-test-recipe3 (source dest)
   (make-instance 'test-recipe3 :source source :dest dest :type :test3))
@@ -91,17 +105,20 @@
 (defmethod build-node ((worker rmq-worker) (recipe test-recipe3))
   (build-test-node3 (name-node recipe) (rmq-node-recipe/source-queue recipe)
                     (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
-                    (node-recipe/batch-size recipe)))
+                    (node-recipe/batch-size recipe) (rmq-worker/host worker)
+                    (rmq-worker/username worker) (rmq-worker/password worker)))
 
 (transactional
     (defclass testing-node4 (rmq-node) ()))
 
 (defclass test-recipe4 (rmq-node-recipe) ())
 
-(defun build-test-node4 (name source dest fail size)
+(defun build-test-node4 (name source dest fail size host user pass)
   (make-instance 'testing-node4 :name name :source source :dest dest :fail fail
                                 :batch-size size :type :test4
-                                :conn (setup-connection :host *rmq-host*)))
+                                :conn (setup-connection :host host
+                                                        :username user
+                                                        :password pass)))
 
 (defun build-test-recipe4 (source dest)
   (make-instance 'test-recipe4 :source source :dest dest :type :test4))
@@ -112,4 +129,5 @@
 (defmethod build-node ((worker rmq-worker) (recipe test-recipe4))
   (build-test-node4 (name-node recipe) (rmq-node-recipe/source-queue recipe)
                     (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
-                    (node-recipe/batch-size recipe)))
+                    (node-recipe/batch-size recipe) (rmq-worker/host worker)
+                    (rmq-worker/username worker) (rmq-worker/password worker)))

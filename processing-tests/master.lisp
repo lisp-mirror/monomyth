@@ -30,8 +30,12 @@
 (defparameter *recipes* `(,*recipe1* ,*recipe2* ,*recipe3* ,*recipe4*))
 
 (teardown
-  (let ((conn (setup-connection :host *rmq-host*)))
+  (let ((conn (setup-connection :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
     (with-channel (conn 1)
+      (queue-delete conn 1 "TEST1-fail")
+      (queue-delete conn 1 "TEST2-fail")
+      (queue-delete conn 1 "TEST3-fail")
+      (queue-delete conn 1 "TEST4-fail")
       (queue-delete conn 1 *queue1*)
       (queue-delete conn 1 *queue2*)
       (queue-delete conn 1 *queue3*)
@@ -46,7 +50,8 @@
 
 (defun send-test-messages ()
   (let ((work-node (build-test-node (format nil "worknode-~d" (get-universal-time))
-                                    *queue1* *queue1* *queue1* 10)))
+                                    *queue1* *queue1* *queue1* 10 *rmq-host*
+                                    *rmq-user* *rmq-pass*)))
     (startup work-node nil)
     (let ((msgs (iter:iterate
                   (iter:repeat *number-of-test-msgs*)
@@ -74,7 +79,8 @@
          (test-msgs (send-test-messages))
          (expected-result (mapcar #'calculate-result-messge test-msgs))
          (work-node (build-test-node (format nil "worknode-~d" (get-universal-time))
-                                     *queue5* *queue1* *queue1* 10)))
+                                     *queue5* *queue1* *queue1* 10 *rmq-host*
+                                     *rmq-user* *rmq-pass*)))
     (format t "Ready to start tests?~%")
     (read-line)
 

@@ -7,7 +7,7 @@
 (v:output-here *terminal-io*)
 
 (deftest worker-processing-test
-  (let ((worker (build-rmq-worker :host *rmq-host*)))
+  (let ((worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
     (start-worker worker (format nil "tcp://~a:~a" *master-host* *mmop-port*))
     (run-worker worker)
     (stop-worker worker)
