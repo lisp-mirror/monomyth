@@ -33,8 +33,7 @@
      (pzmq:libzmq-error (e) (declare (ignore e))
        (error 'mmop-error
               :version ,version
-              :message (format nil "zmq error: ~a" (pzmq:strerror))))
-     (:no-error (res) res)))
+              :message (format nil "zmq error: ~a" (pzmq:strerror))))))
 
 (defun send-msg-frames (socket version frames)
   "Helper function that sends a set of frames as single message"
@@ -71,5 +70,4 @@
              :message "no messages to pull"))
     (pzmq:libzmq-error (e) (declare (ignore e))
       (error 'mmop-error
-             :message (format nil "could not pull messages: ~a" (pzmq:strerror))))
-    (:no-error (res) res)))
+             :message (format nil "could not pull messages: ~a" (pzmq:strerror))))))

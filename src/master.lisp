@@ -49,10 +49,9 @@ and a table of node type symbols to node recipes"
   (v:info :master "starting master server with ~a threads listening for workers at port ~a"
           thread-count client-port)
   (let ((master (build-master)))
-    (atomic
-     (let ((socket (pzmq:socket (master-context master) :router)))
-       (setf (master-outbound-socket master) socket)
-       (pzmq:bind socket (format nil "tcp://*:~a" client-port))))
+    (let ((socket (pzmq:socket (master-context master) :router)))
+      (atomic (setf (master-outbound-socket master) socket))
+      (pzmq:bind socket (format nil "tcp://*:~a" client-port)))
 
     (iter:iterate
       (iter:repeat thread-count)
