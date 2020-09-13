@@ -13,10 +13,12 @@
 (defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
 (defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
 (defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
+(defparameter *rmq-user* (uiop:getenv "TEST_RMQ_DEFAULT_USER"))
+(defparameter *rmq-pass* (uiop:getenv "TEST_RMQ_DEFAULT_PASS"))
 (v:output-here *terminal-io*)
 
 (teardown
- (let ((conn (setup-connection :host (uiop:getenv "TEST_RMQ"))))
+ (let ((conn (setup-connection :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
    (with-channel (conn 1)
      (queue-delete conn 1 *source-queue*)
      (queue-delete conn 1 *dest-queue*)
@@ -41,7 +43,7 @@
              (sleep .1)
              (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0
                                          (mmop-m:worker-ready-v0-client-id msg))))))))
-  (let ((wrkr (build-rmq-worker :host *rmq-host*)))
+  (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
     (start-worker wrkr "tcp://localhost:55555")
     (run-worker wrkr)
     (stop-worker wrkr)
@@ -62,7 +64,7 @@
                  (ok (eq (type-of res-msg) 'mmop-m:start-node-success-v0))
                  (ok (string= (mmop-m:start-node-success-v0-type res-msg) "TEST")))
                (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0 id)))))))
-    (let ((wrkr (build-rmq-worker :host *rmq-host*)))
+    (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
       (start-worker wrkr "tcp://localhost:55555")
       (run-worker wrkr)
       (stop-worker wrkr)
@@ -92,7 +94,7 @@
                  (ok (string= (mmop-m:start-node-failure-v0-reason-msg res-msg)
                               "worker cannot handle recipe type")))
                (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0 id)))))))
-    (let ((wrkr (build-rmq-worker :host *rmq-host*)))
+    (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
       (start-worker wrkr "tcp://localhost:55555")
       (run-worker wrkr)
       (stop-worker wrkr)
@@ -103,7 +105,8 @@
     (let ((recipe1 (build-test-recipe *source-queue* *dest-queue*))
           (work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *source-queue* *dest-queue* *dest-queue* 10 *rmq-host*))
+                             *source-queue* *dest-queue* *dest-queue* 10 *rmq-host*
+                             *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
@@ -124,7 +127,7 @@
                    (ok (string= (mmop-m:start-node-success-v0-type res-msg) "TEST")))
                  (sleep *test-process-time*)
                  (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0 id)))))))
-      (let ((wrkr (build-rmq-worker :host *rmq-host*)))
+      (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
         (start-worker wrkr "tcp://localhost:55555")
         (run-worker wrkr)
         (stop-worker wrkr)
@@ -132,7 +135,8 @@
 
       (setf work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *dest-queue* *dest-queue* *dest-queue* 10 *rmq-host*))
+                             *dest-queue* *dest-queue* *dest-queue* 10 *rmq-host*
+                             *rmq-user* *rmq-pass*))
       (startup work-node nil)
 
       (labels ((get-msg-w-restart ()
@@ -154,7 +158,8 @@
           (recipe3 (build-test-recipe3 queue-3 queue-4 4))
           (work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-1 queue-2 queue-3 10 *rmq-host*))
+                             queue-1 queue-2 queue-3 10 *rmq-host*
+                             *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
@@ -183,14 +188,15 @@
                    (ok (string= (mmop-m:start-node-success-v0-type res-msg3) "TEST3")))
                  (sleep *test-process-time*)
                  (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0 id)))))))
-      (let ((wrkr (build-rmq-worker :host *rmq-host*)))
+      (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
         (start-worker wrkr "tcp://localhost:55555")
         (run-worker wrkr)
         (stop-worker wrkr)
         (pass "worker stopped"))
 
       (setf work-node (build-test-node (format nil "worknode-~d" (get-universal-time))
-                                       queue-4 queue-4 queue-4 10 *rmq-host*))
+                                       queue-4 queue-4 queue-4 10 *rmq-host*
+                                       *rmq-user* *rmq-pass*))
       (startup work-node nil)
       (labels ((get-msg-w-restart ()
                  (handler-case (get-message work-node)

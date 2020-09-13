@@ -6,6 +6,8 @@
 
 (v:output-here *terminal-io*)
 (defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
+(defparameter *rmq-user* (uiop:getenv "TEST_RMQ_DEFAULT_USER"))
+(defparameter *rmq-pass* (uiop:getenv "TEST_RMQ_DEFAULT_PASS"))
 (defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
 (defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
 (defparameter *test-process-time* 2)
@@ -15,7 +17,7 @@
 (defparameter queue-4 (format nil "process-test-~a-4" (get-universal-time)))
 
 (teardown
-  (let ((conn (setup-connection :host (uiop:getenv "TEST_RMQ"))))
+  (let ((conn (setup-connection :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
     (with-channel (conn 1)
       (queue-delete conn 1 *source-queue*)
       (queue-delete conn 1 *dest-queue*)
@@ -81,7 +83,8 @@
   (testing "single node"
     (let ((work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *source-queue* *dest-queue* *dest-queue* 10 *rmq-host*))
+                             *source-queue* *dest-queue* *dest-queue* 10 *rmq-host*
+                             *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed"))
           (recipe1 (build-test-recipe *source-queue* *dest-queue*)))
 
@@ -107,7 +110,8 @@
 
       (setf work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *dest-queue* *dest-queue* *dest-queue* 10 *rmq-host*))
+                             *dest-queue* *dest-queue* *dest-queue* 10 *rmq-host*
+                             *rmq-user* *rmq-pass*))
       (startup work-node nil)
       (labels ((get-msg-w-restart ()
                  (handler-case (get-message work-node)
@@ -125,7 +129,8 @@
   (testing "worker processes data - multiple nodes"
     (let ((work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-1 queue-2 queue-3 10 *rmq-host*))
+                             queue-1 queue-2 queue-3 10 *rmq-host*
+                             *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed"))
           (recipe1 (build-test-recipe1 queue-1 queue-2 5))
           (recipe2 (build-test-recipe2 queue-2 queue-3 10))
@@ -161,7 +166,8 @@
 
       (setf work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-4 queue-4 queue-4 10 *rmq-host*))
+                             queue-4 queue-4 queue-4 10 *rmq-host*
+                             *rmq-user* *rmq-pass*))
       (startup work-node nil)
       (labels ((get-msg-w-restart ()
                  (handler-case (get-message work-node)

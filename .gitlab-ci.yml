@@ -9,6 +9,8 @@ test:
     - rabbitmq:latest
   variables:
     TEST_RMQ: "rabbitmq"
+    TEST_RMQ_DEFAULT_USER: "guest"
+    TEST_RMQ_DEFAULT_PASS: "guest"
   before_script:
     - apt update -qy
     - apt install -y curl libcurl4-openssl-dev automake build-essential librabbitmq-dev libzmq3-dev libffi-dev
