@@ -1,0 +1,24 @@
+image: ubuntu:bionic
+
+stages:
+  - test
+
+test:
+  stage: test
+  services:
+    - rabbitmq:latest
+  variables:
+    TEST_RMQ: "rabbitmq"
+    TEST_RMQ_DEFAULT_USER: "guest"
+    TEST_RMQ_DEFAULT_PASS: "guest"
+  before_script:
+    - apt update -qy
+    - apt install -y curl libcurl4-openssl-dev automake build-essential librabbitmq-dev libzmq3-dev libffi-dev
+    - curl -L https://raw.githubusercontent.com/roswell/roswell/release/scripts/install-for-ci.sh | sh
+    - ln -s /builds/smaller_infinity/monomyth /root/.roswell/local-projects/monomyth
+  script:
+    - ./bin/test.ros
+  only:
+    - merge_request
+    - develop
+    - master

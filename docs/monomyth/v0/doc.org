@@ -1,0 +1,185 @@
+#+TITLE: Monomyth
+#+AUTHOR: Paul Ricks
+
+* Introduction
+  Monomyth is a distributed data processing system built using Common Lisp.
+  It is designed to split the messaging systems into two, one defined and
+  controlled by Monomyth, and one defined and controlled by the user.
+  The messaging controlled by the user pertains only to data, which moves between
+  persisted data streams and node threads.
+  The structure and manipulation of this data is largely defined by the user
+  (though there are data stream specific aspects certain node types might handle).
+  Monomyth itself handles all aspects of system orchestration via MMOP.
+  The work itself is done on a group of distributed workers that use concurrent,
+  user defined nodes to process the data and are controlled by a single master server.
+
+* System Architecture
+  [[./system.png]]
+
+  Monomyth is split into four distinct pieces.
+  The first is the data stream; an outside system that persists data so that,
+  should Monomyth fail, the data remains safe.
+  This allows for a fail fast structure.
+
+  The second is the Nodes.
+  These nodes handle a single distinct action on a single thread.
+  They first pick up a batch of data from the data stream, act on it, and place it
+  back on a new stream (or queue) on the outside system.
+
+  The nodes are started and stopped by a worker server.
+  The server takes no other action other than this, nodes cannot by altered.
+  It is assumed that there is a one to one ratio between servers and workers.
+
+  Workers are controlled by a single master server.
+  The master and workers communicate via the Monomyth Orchestration Protocol (MMOP).
+
+** Data Stream
+   The data streams are designed to be third party systems such as Kafka or RabbitMQ
+   that manage and persist data outside of memory.
+   The thoughts behind this are largely about safety, but also allow for a fail
+   fast design of Monomyth's core architecture.
+   First consider the following paragraphs from the ZeroMQ guide:
+
+   #+BEGIN_QUOTE
+   There is a general lesson I've learned over a couple of decades of writing
+   protocols small and large.
+   I call this the Cheap or Nasty pattern: you can often split your work into
+   two aspects or layers and solve these separately—one using a "cheap" approach,
+   the other using a "nasty" approach.
+
+   The key insight to making Cheap or Nasty work is to realize that many protocols
+   mix a low-volume chatty part for control, and a high-volume asynchronous part for data.
+   For instance, HTTP has a chatty dialog to authenticate and get pages, and an
+   asynchronous dialog to stream data.
+   FTP actually splits this over two ports; one port for control and one port for data.
+
+   Protocol designers who don't separate control from data tend to make horrid protocols,
+   because the trade-offs in the two cases are almost totally opposed.
+   What is perfect for control is bad for data, and what's ideal for data just doesn't
+   work for control.
+   It's especially true when we want high performance at the same time as
+   extensibility and good error checking.
+
+   -- /http://zguide.zeromq.org/page:chapter7#toc13/
+   #+END_QUOTE
+
+   The separation of MMOP and the data streams is designed to support this exact idea.
+   MMOP support the 'chatty' control issues, which will hopefully one day include
+   everything from the basic control commands being built now, to one day things as well
+   as monitoring and telemetry.
+   Meanwhile, these existing, proven, products support the 'nasty', portion of our
+   communication.
+
+   Not only that, but they often provide support for data persistence so that the
+   entire stack can go down, Monomyth and the data stream, and no data is lost.
+   Furthermore, the default way of handling these data streams makes it very easy
+   to support an /at least one/ guarantee, requiring an idempotent system, but still
+   requiring far less work from the user or Monomyth's part to ensure that each
+   piece of data is at least processed.
+
+** Nodes (Worker Threads)
+   All the core work is done on worker threads, persist threads that continuously
+   poll data streams, transform the items, and then place the items back on the
+   data stream for a new node to pick up.
+   These nodes are responsible for all data specific logic, including acks/nacks
+   and how to handle failure.
+
+** Worker Servers
+   Worker servers exist to create and manage their threads and little else.
+
+   They interact with the masters over MMOP, specifically with a dealer socket.
+
+   A quick note on connections to the data streams.
+   Currently, the ~rmq-node~ has one RabbitMQ connection per thread (as a result
+   of the library it is using).
+   Ideally, there would be one connection per server, not thread.
+
+** Master Server
+   Ultimately the master is responsible for the coordination of the Monomyth system,
+   which right now limits it to starting nodes and telling workers to shutdown.
+   The master server's state is limited to the recipes it knows and what types of
+   recipes are running on what workers.
+   At startup, the master starts ~n~ handler long lived threads that actually process
+   and respond to the MMOP messages the master receives (this is done via the ~req~/~router~
+   ZeroMQ load balancing pattern, see http://zguide.zeromq.org/page:chapter3#toc18).
+
+* MMOP
+  MMOP is a protocol designed to run on top of ZeroMQ used by master and worker servers.
+  Each MMOP message is a multipart ZeroMQ Message requiring the collection of multiple frames.
+
+** Sockets
+   Currently, the set up is that each worker has a dealer socket and the master
+   uses routing socket that then routs all of the messages out to internal threads
+   that parse and act on them.
+   This allows for full async communication.
+   Note, to make this work, the master server must receive a full message from the
+   workers before then communicating with them.
+
+** Versioning
+   The first MMOP frame (that is the first non-routing frame) is the MMOP version,
+   which is a string constructed as ~MMOP/<version>~ where the only current
+   version is 0.
+   Version 0 makes no promises as to backwards compatibility.
+
+** Common Frames
+   All Messages have a few base frames that are sent the before all messages.
+   The first frame for all worker messages is the MMOP version.
+   The first frame for all master messages is the client identity and the second
+   is the MMOP version.
+
+*** Defined Messages
+
+**** Worker Ready [worker-ready]
+
+     The worker-ready message is sent from a worker server to the master server
+     to indicate that it is up and ready to start nodes.
+     No confirmation message is sent.
+
+     Frames:
+     1. ~READY~
+
+**** Start Node [start-node]
+
+     The start-node message is sent from the master server to a worker using
+     the supplied recipe.
+     The supplied recipe (~<recipe byte array>~) is the result of serializing the
+     recipe object using ~cl-store~ and ~flexi-streams~.
+     The recipe sent is an object that is the child of some node type that can talk
+     to a data stream (for instance the ~rmq-node~).
+     The worker *must* know this recipe class in advance, or the node creation will
+     fail.
+
+     Frames:
+     1. ~START-NODE~
+     2. ~<recipe type>~
+     3. ~<recipe byte array>~
+
+**** Start Node Succeeded [start-node-success]
+
+     The start-node-success message is sent from a worker server to the master server
+     in response to the start-node recipe, indicating that the node thread has been
+     successfully spun up.
+
+     Frames:
+     1. ~START-NODE-SUCCESS~
+     2. ~<recipe type>~
+
+**** Start Node Failed [start-node-failure]
+
+     The start-node-failure message is sent from a worker server to the master server
+     in response to the start-node recipe, indicating that the node thread has failed
+     to spin up.
+
+     Frames:
+     1. ~START-NODE-FAILURE~
+     2. ~<recipe type>~
+     3. ~<reason-category>~
+     4. ~<reason-string>~
+
+**** Stop Worker [stop-worker]
+
+     Instructs a worker to shutdown all threads and connections.
+     Results in no return message (right now).
+
+     Frames:
+     1. ~SHUTDOWN~
