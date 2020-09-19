@@ -7,7 +7,7 @@
                 ((:file "node-recipe")
                  (:file "mmop")
                  (:file "mmop-worker"
-                  :components ("mmop"))
+                  :components ("mmop" "node-recipe"))
                  (:file "mmop-master"
                   :components ("mmop" "node-recipe"))
                  (:file "node")
@@ -27,6 +27,7 @@
                :rutils
                :trivia
                :alexandria
+               :cl-algebraic-data-type
                :pzmq
                :uuid
                :iterate

@@ -60,9 +60,9 @@
       (sleep .1)
 
       (testing "worker-ready-v0"
-        (send-msg client1 *mmop-v0* (mmop-w:make-worker-ready-v0))
-        (send-msg client2 *mmop-v0* (mmop-w:make-worker-ready-v0))
-        (send-msg client3 *mmop-v0* (mmop-w:make-worker-ready-v0))
+        (send-msg client1 *mmop-v0* mmop-w:worker-ready-v0)
+        (send-msg client2 *mmop-v0* mmop-w:worker-ready-v0)
+        (send-msg client3 *mmop-v0* mmop-w:worker-ready-v0)
         (sleep .1)
 
         (iter:iterate
@@ -155,11 +155,11 @@
     (stop-master master)))
 
 (defun test-client-recieves-start-node (socket type-id recipe)
-  (let ((msg (mmop-w:pull-worker-message socket)))
-    (ok (typep msg 'mmop-w:start-node-v0))
-    (ok (string= type-id (mmop-w:start-node-v0-type msg)))
-    (let ((got-recipe (mmop-w:start-node-v0-recipe msg)))
-      (ok (eq (node-recipe/type recipe) (node-recipe/type got-recipe))))))
+  (adt:match mmop-w:received-mmop (mmop-w:pull-worker-message socket)
+    ((mmop-w:start-node-v0 node-type got-recipe)
+     (ok (string= type-id node-type))
+      (ok (eq (node-recipe/type recipe) (node-recipe/type got-recipe))))
+    (_ (fail "unexpected message type"))))
 
 (defun test-master-state-after-asks (master client-id reqs)
   (let ((proper-counts
@@ -181,8 +181,8 @@
     (iter:for msg = (if (zerop (random 2))
                         (progn
                           (incf (gethash req results-table 0))
-                          (mmop-w:make-start-node-success-v0 req))
-                        (mmop-w:make-start-node-failure-v0 req "test" "test")))
+                          (mmop-w:start-node-success-v0 req))
+                        (mmop-w:start-node-failure-v0 req "test" "test")))
     (send-msg socket *mmop-v0* msg)))
 
 (defun test-resonses (master client-id expected-results)

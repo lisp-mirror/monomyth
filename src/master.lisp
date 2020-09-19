@@ -135,16 +135,14 @@ and a table of node type symbols to node recipes"
 
 (defun handle-message (master mmop-msg)
   "handles a specific message for the master, return t if the master should continue"
-  (let ((res (match mmop-msg
-               ((mmop-m:worker-ready-v0 :client-id client-id)
+  (let ((res (adt:match received-mmop mmop-msg
+               ((worker-ready-v0 client-id)
                 (add-worker master client-id))
 
-               ((mmop-m:start-node-success-v0
-                 :client-id id :type type-id)
+               ((start-node-success-v0 id type-id)
                 (start-successful master id type-id))
 
-               ((mmop-m:start-node-failure-v0
-                 :client-id id :type type-id :reason-cat cat :reason-msg msg)
+               ((start-node-failure-v0 id type-id cat msg)
                 (start-unsuccessful master id type-id cat msg)))))
 
     (unless res
@@ -226,7 +224,7 @@ returns t if it works, nil otherwise"
         (handler-case
             (let ((worker-id (determine-worker-for-node master type-id)))
               (send-msg (master-outbound-socket master) *mmop-v0*
-                        (mmop-m:make-start-node-v0 worker-id recipe))
+                        (start-node-v0 worker-id recipe))
               (atomic
                (let ((val (get-ghash
                            (worker-info-outstanding-request-counts
@@ -254,7 +252,7 @@ been sent, nil otherwise"
   (if (get-ghash (master-workers master) worker-id)
       (handler-case
           (send-msg (master-outbound-socket master) *mmop-v0*
-                    (mmop-m:make-shutdown-worker-v0 worker-id))
+                    (shutdown-worker-v0 worker-id))
         (mmop-error (c)
           (progn
             (v:error :master.handler

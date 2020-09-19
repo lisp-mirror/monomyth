@@ -56,10 +56,10 @@
         (pzmq:with-socket client :router
           (pzmq:bind client "tcp://*:55555")
 
-          (send-msg client *mmop-v0*
-                    (mmop-m:make-start-node-v0
-                     (mmop-m:worker-ready-v0-client-id (mmop-m:pull-master-message client))
-                     recipe))
+          (adt:match mmop-m:received-mmop (mmop-m:pull-master-message client)
+            ((mmop-m:worker-ready-v0 client-id)
+             (send-msg client *mmop-v0* (mmop-m:start-node-v0 client-id recipe)))
+            (_ (fail "unexpected message type")))
           (pass "message sent")))))
 
   (testing "node-start-success"
@@ -67,28 +67,30 @@
       (pzmq:with-socket client :router
         (pzmq:bind client "tcp://*:55555")
 
-        (let ((res (mmop-m:pull-master-message client)))
-          (ok (typep res 'mmop-m:start-node-success-v0))
-          (ok (string= (mmop-m:start-node-success-v0-type res) "TEST"))))))
+        (adt:match mmop-m:received-mmop (mmop-m:pull-master-message client)
+          ((mmop-m:start-node-success-v0 _ node-type)
+           (ok (string= node-type "TEST")))
+          (_ (fail "unexpected message type"))))))
 
   (testing "node-start-failure"
     (pzmq:with-context nil
       (pzmq:with-socket client :router
         (pzmq:bind client "tcp://*:55555")
 
-        (let ((res (mmop-m:pull-master-message client)))
-          (ok (typep res 'mmop-m:start-node-failure-v0))
-          (ok (string= (mmop-m:start-node-failure-v0-type res) "TEST"))
-          (ok (string= (mmop-m:start-node-failure-v0-reason-cat res) "test"))
-          (ok (string= (mmop-m:start-node-failure-v0-reason-msg res) "test-msg"))))))
+        (adt:match mmop-m:received-mmop (mmop-m:pull-master-message client)
+          ((mmop-m:start-node-failure-v0 _ node-type cat msg)
+           (ok (string= node-type "TEST"))
+           (ok (string= cat "test"))
+           (ok (string= msg "test-msg")))
+          (_ (fail "unexpected message type"))))))
 
   (testing "stop-worker"
     (pzmq:with-context nil
       (pzmq:with-socket client :router
         (pzmq:bind client "tcp://*:55555")
 
-        (send-msg client *mmop-v0*
-                  (mmop-m:make-shutdown-worker-v0
-                   (mmop-m:worker-ready-v0-client-id
-                    (mmop-m:pull-master-message client))))
+        (adt:match mmop-m:received-mmop (mmop-m:pull-master-message client)
+          ((mmop-m:worker-ready-v0 client-id)
+           (send-msg client *mmop-v0* (mmop-m:shutdown-worker-v0 client-id)))
+          (_ (fail "unexpected message type")))
         (pass "message sent")))))
