@@ -38,12 +38,13 @@
        (pzmq:with-context nil
          (pzmq:with-socket master :router
            (pzmq:bind master "tcp://*:55555")
-           (let ((msg (mmop-m:pull-master-message master)))
-             (ok (eq (type-of msg) 'mmop-m:worker-ready-v0))
-             (sleep .1)
-             (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0
-                                         (mmop-m:worker-ready-v0-client-id msg))))))))
-  (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
+           (adt:match mmop-m:received-mmop (mmop-m:pull-master-message master)
+             ((mmop-m:worker-ready-v0 client-id)
+              (send-msg master *mmop-v0*
+                        (mmop-m:shutdown-worker-v0 client-id)))
+             (_ (fail "unexpected message type")))))))
+  (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                :password *rmq-pass*)))
     (start-worker wrkr "tcp://localhost:55555")
     (run-worker wrkr)
     (stop-worker wrkr)
@@ -56,15 +57,20 @@
          (pzmq:with-context nil
            (pzmq:with-socket master :router
              (pzmq:bind master "tcp://*:55555")
-             (let* ((msg (mmop-m:pull-master-message master))
-                    (id (mmop-m:worker-ready-v0-client-id msg)))
-               (ok (eq (type-of msg) 'mmop-m:worker-ready-v0))
-               (send-msg master *mmop-v0* (mmop-m:make-start-node-v0 id recipe))
-               (let ((res-msg (mmop-m:pull-master-message master)))
-                 (ok (eq (type-of res-msg) 'mmop-m:start-node-success-v0))
-                 (ok (string= (mmop-m:start-node-success-v0-type res-msg) "TEST")))
-               (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0 id)))))))
-    (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
+             (adt:match mmop-m:received-mmop (mmop-m:pull-master-message master)
+               ((mmop-m:worker-ready-v0 client-id)
+                (send-msg master *mmop-v0*
+                          (mmop-m:start-node-v0 client-id recipe))
+                (adt:match mmop-m:received-mmop
+                  (mmop-m:pull-master-message master)
+                  ((mmop-m:start-node-success-v0 new-id msg)
+                   (ok (string= new-id client-id))
+                   (ok (string= msg "TEST")))
+                  (_ (fail "unexpected message type")))
+                (send-msg master *mmop-v0* (mmop-m:shutdown-worker-v0 client-id)))
+               (_ (fail "unexpected message type")))))))
+    (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                  :password *rmq-pass*)))
       (start-worker wrkr "tcp://localhost:55555")
       (run-worker wrkr)
       (stop-worker wrkr)
@@ -82,18 +88,20 @@
          (pzmq:with-context nil
            (pzmq:with-socket master :router
              (pzmq:bind master "tcp://*:55555")
-             (let* ((msg (mmop-m:pull-master-message master))
-                    (id (mmop-m:worker-ready-v0-client-id msg)))
-               (ok (eq (type-of msg) 'mmop-m:worker-ready-v0))
-               (send-msg master *mmop-v0* (mmop-m:make-start-node-v0 id recipe))
-               (let ((res-msg (mmop-m:pull-master-message master)))
-                 (ok (eq (type-of res-msg) 'mmop-m:start-node-failure-v0))
-                 (ok (string= (mmop-m:start-node-failure-v0-type res-msg) "TEST"))
-                 (ok (string= (mmop-m:start-node-failure-v0-reason-cat res-msg)
-                              "recipe build"))
-                 (ok (string= (mmop-m:start-node-failure-v0-reason-msg res-msg)
-                              "worker cannot handle recipe type")))
-               (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0 id)))))))
+             (adt:match mmop-m:received-mmop (mmop-m:pull-master-message master)
+               ((mmop-m:worker-ready-v0 client-id)
+                (send-msg master *mmop-v0*
+                          (mmop-m:start-node-v0 client-id recipe))
+                (adt:match mmop-m:received-mmop
+                  (mmop-m:pull-master-message master)
+                  ((mmop-m:start-node-failure-v0 new-id node-type cat msg)
+                   (ok (string= new-id client-id))
+                   (ok (string= node-type "TEST"))
+                   (ok (string= cat "recipe build"))
+                   (ok (string= msg "worker cannot handle recipe type")))
+                  (_ (fail "unexpected message type")))
+                (send-msg master *mmop-v0* (mmop-m:shutdown-worker-v0 client-id)))
+               (_ (fail "unexpected message type")))))))
     (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
       (start-worker wrkr "tcp://localhost:55555")
       (run-worker wrkr)
@@ -118,15 +126,19 @@
            (pzmq:with-context nil
              (pzmq:with-socket master :router
                (pzmq:bind master "tcp://*:55555")
-               (let* ((msg (mmop-m:pull-master-message master))
-                      (id (mmop-m:worker-ready-v0-client-id msg)))
-                 (ok (eq (type-of msg) 'mmop-m:worker-ready-v0))
-                 (send-msg master *mmop-v0* (mmop-m:make-start-node-v0 id recipe1))
-                 (let ((res-msg (mmop-m:pull-master-message master)))
-                   (ok (eq (type-of res-msg) 'mmop-m:start-node-success-v0))
-                   (ok (string= (mmop-m:start-node-success-v0-type res-msg) "TEST")))
-                 (sleep *test-process-time*)
-                 (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0 id)))))))
+               (adt:match mmop-m:received-mmop (mmop-m:pull-master-message master)
+                 ((mmop-m:worker-ready-v0 client-id)
+                  (send-msg master *mmop-v0*
+                            (mmop-m:start-node-v0 client-id recipe1))
+                  (adt:match mmop-m:received-mmop
+                    (mmop-m:pull-master-message master)
+                    ((mmop-m:start-node-success-v0 new-id msg)
+                     (ok (string= new-id client-id))
+                     (ok (string= msg "TEST")))
+                    (_ (fail "unexpected message type")))
+                  (sleep *test-process-time*)
+                  (send-msg master *mmop-v0* (mmop-m:shutdown-worker-v0 client-id)))
+                 (_ (fail "unexpected message type")))))))
       (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
         (start-worker wrkr "tcp://localhost:55555")
         (run-worker wrkr)
@@ -171,23 +183,39 @@
            (pzmq:with-context nil
              (pzmq:with-socket master :router
                (pzmq:bind master "tcp://*:55555")
-               (let* ((msg (mmop-m:pull-master-message master))
-                      (id (mmop-m:worker-ready-v0-client-id msg)))
-                 (ok (eq (type-of msg) 'mmop-m:worker-ready-v0))
-                 (send-msg master *mmop-v0* (mmop-m:make-start-node-v0 id recipe1))
-                 (let ((res-msg1 (mmop-m:pull-master-message master)))
-                   (ok (eq (type-of res-msg1) 'mmop-m:start-node-success-v0))
-                   (ok (string= (mmop-m:start-node-success-v0-type res-msg1) "TEST1")))
-                 (send-msg master *mmop-v0* (mmop-m:make-start-node-v0 id recipe2))
-                 (let ((res-msg2 (mmop-m:pull-master-message master)))
-                   (ok (eq (type-of res-msg2) 'mmop-m:start-node-success-v0))
-                   (ok (string= (mmop-m:start-node-success-v0-type res-msg2) "TEST2")))
-                 (send-msg master *mmop-v0* (mmop-m:make-start-node-v0 id recipe3))
-                 (let ((res-msg3 (mmop-m:pull-master-message master)))
-                   (ok (eq (type-of res-msg3) 'mmop-m:start-node-success-v0))
-                   (ok (string= (mmop-m:start-node-success-v0-type res-msg3) "TEST3")))
-                 (sleep *test-process-time*)
-                 (send-msg master *mmop-v0* (mmop-m:make-shutdown-worker-v0 id)))))))
+               (adt:match mmop-m:received-mmop (mmop-m:pull-master-message master)
+                 ((mmop-m:worker-ready-v0 client-id)
+
+                  (send-msg master *mmop-v0*
+                            (mmop-m:start-node-v0 client-id recipe1))
+                  (adt:match mmop-m:received-mmop
+                    (mmop-m:pull-master-message master)
+                    ((mmop-m:start-node-success-v0 new-id msg)
+                     (ok (string= new-id client-id))
+                     (ok (string= msg "TEST1")))
+                    (_ (fail "unexpected message type")))
+
+                  (send-msg master *mmop-v0*
+                            (mmop-m:start-node-v0 client-id recipe2))
+                  (adt:match mmop-m:received-mmop
+                    (mmop-m:pull-master-message master)
+                    ((mmop-m:start-node-success-v0 new-id msg)
+                     (ok (string= new-id client-id))
+                     (ok (string= msg "TEST2")))
+                    (_ (fail "unexpected message type")))
+
+                  (send-msg master *mmop-v0*
+                            (mmop-m:start-node-v0 client-id recipe3))
+                  (adt:match mmop-m:received-mmop
+                    (mmop-m:pull-master-message master)
+                    ((mmop-m:start-node-success-v0 new-id msg)
+                     (ok (string= new-id client-id))
+                     (ok (string= msg "TEST3")))
+                    (_ (fail "unexpected message type")))
+
+                  (sleep *test-process-time*)
+                  (send-msg master *mmop-v0* (mmop-m:shutdown-worker-v0 client-id)))
+                 (_ (fail "unexpected message type")))))))
       (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
         (start-worker wrkr "tcp://localhost:55555")
         (run-worker wrkr)

@@ -80,10 +80,10 @@
           (pzmq:connect client "tcp://localhost:55555")
           (pzmq:bind server "tcp://*:55555")
 
-          (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
-          (let ((res (mmop-m:pull-master-message server)))
-            (ok (eq (type-of res) 'mmop-m:worker-ready-v0))
-            (ok (string= (mmop-m:worker-ready-v0-client-id res) client-name)))))))
+          (send-msg client *mmop-v0* mmop-w:worker-ready-v0)
+          (adt:match mmop-m:received-mmop (mmop-m:pull-master-message server)
+            ((mmop-m:worker-ready-v0 client-id) (ok (string= client-id client-name)))
+            (_ (fail "mmop message is of wrong type")))))))
 
   (testing "start-node"
     (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
@@ -97,16 +97,19 @@
           (pzmq:connect client "tcp://localhost:55555")
           (pzmq:bind server "tcp://*:55555")
 
-          (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
+          (send-msg client *mmop-v0* mmop-w:worker-ready-v0)
           (mmop-m:pull-master-message server)
-          (send-msg server *mmop-v0* (mmop-m:make-start-node-v0 client-name recipe))
-          (let ((res (mmop-w:pull-worker-message client)))
-            (ok (eq (type-of res) 'mmop-w:start-node-v0))
-            (ok (string= (mmop-w:start-node-v0-type res) "TEST"))
-            (let ((got-res (mmop-w:start-node-v0-recipe res)))
-              (ok (eq (node-recipe/type got-res) (node-recipe/type recipe)))
-              (ok (string= (rmq-node-recipe/source-queue got-res) (rmq-node-recipe/source-queue recipe)))
-              (ok (string= (rmq-node-recipe/dest-queue got-res) (rmq-node-recipe/dest-queue recipe)))))))))
+          (send-msg server *mmop-v0* (mmop-m:start-node-v0 client-name recipe))
+          (adt:match mmop-w:received-mmop (mmop-w:pull-worker-message client)
+            ((mmop-w:start-node-v0 rtype got-res)
+             (progn
+               (ok (string= rtype "TEST"))
+               (ok (eq (node-recipe/type got-res) (node-recipe/type recipe)))
+               (ok (string= (rmq-node-recipe/source-queue got-res)
+                            (rmq-node-recipe/source-queue recipe)))
+               (ok (string= (rmq-node-recipe/dest-queue got-res)
+                            (rmq-node-recipe/dest-queue recipe)))))
+            (_ (fail "mmop message is of wrong type")))))))
 
   (testing "node-start-success"
     (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
@@ -118,11 +121,12 @@
           (pzmq:connect client "tcp://localhost:55555")
           (pzmq:bind server "tcp://*:55555")
 
-          (send-msg client *mmop-v0* (mmop-w:make-start-node-success-v0 "TEST"))
-          (let ((res (mmop-m:pull-master-message server)))
-            (ok (eq (type-of res) 'mmop-m:start-node-success-v0))
-            (ok (string= (mmop-m:start-node-success-v0-client-id res) client-name))
-            (ok (string= (mmop-m:start-node-success-v0-type res) "TEST")))))))
+          (send-msg client *mmop-v0* (mmop-w:start-node-success-v0 "TEST"))
+          (adt:match mmop-m:received-mmop (mmop-m:pull-master-message server)
+            ((mmop-m:start-node-success-v0 client-id rtype)
+             (ok (string= client-id client-name))
+             (ok (string= rtype "TEST")))
+            (_ (fail "mmop message is of wrong type")))))))
 
   (testing "node-start-failure"
     (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
@@ -134,14 +138,15 @@
           (pzmq:connect client "tcp://localhost:55555")
           (pzmq:bind server "tcp://*:55555")
 
-          (send-msg client *mmop-v0* (mmop-w:make-start-node-failure-v0
+          (send-msg client *mmop-v0* (mmop-w:start-node-failure-v0
                                       "TEST" "test" "test-msg"))
-          (let ((res (mmop-m:pull-master-message server)))
-            (ok (eq (type-of res) 'mmop-m:start-node-failure-v0))
-            (ok (string= (mmop-m:start-node-failure-v0-client-id res) client-name))
-            (ok (string= (mmop-m:start-node-failure-v0-type res) "TEST"))
-            (ok (string= (mmop-m:start-node-failure-v0-reason-cat res) "test"))
-            (ok (string= (mmop-m:start-node-failure-v0-reason-msg res) "test-msg")))))))
+          (adt:match mmop-m:received-mmop (mmop-m:pull-master-message server)
+            ((mmop-m:start-node-failure-v0 client-id rtype rcat rmsg)
+             (ok (string= client-id client-name))
+             (ok (string= rtype "TEST"))
+             (ok (string= rcat "test"))
+             (ok (string= rmsg "test-msg")))
+            (_ (fail "mmop message is of wrong type")))))))
 
   (testing "stop-worker"
     (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
@@ -153,7 +158,9 @@
           (pzmq:connect client "tcp://localhost:55555")
           (pzmq:bind server "tcp://*:55555")
 
-          (send-msg client *mmop-v0* (mmop-w:make-worker-ready-v0))
+          (send-msg client *mmop-v0* mmop-w:worker-ready-v0)
           (mmop-m:pull-master-message server)
-          (send-msg server *mmop-v0* (mmop-m:make-shutdown-worker-v0 client-name))
-          (ok (eq (type-of (mmop-w:pull-worker-message client)) 'mmop-w:shutdown-worker-v0)))))))
+          (send-msg server *mmop-v0* (mmop-m:shutdown-worker-v0 client-name))
+          (adt:match mmop-w:received-mmop (mmop-w:pull-worker-message client)
+            (mmop-w:shutdown-worker-v0 (pass "mmop message is of correct type"))
+            (_ (fail "mmop message is of wrong type"))))))))

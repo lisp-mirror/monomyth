@@ -45,7 +45,7 @@ it should be okay start a node"))
   (setf (worker/socket worker) (pzmq:socket (worker/context worker) :dealer))
   (pzmq:setsockopt (worker/socket worker) :identity (worker/name worker))
   (pzmq:connect (worker/socket worker) master-address)
-  (send-msg (worker/socket worker) (worker/mmop-version worker) (make-worker-ready-v0)))
+  (send-msg (worker/socket worker) (worker/mmop-version worker) mmop-w:worker-ready-v0))
 
 (defun run-worker (worker)
   "main event loop for the worker"
@@ -60,7 +60,7 @@ it should be okay start a node"))
 
 (defun handle-message (worker mmop-msg)
   "handles a specific message for the worker, return t if the worker should continue"
-  (let ((res (trivia:match mmop-msg
+  (let ((res (adt:match mmop-w:received-mmop mmop-msg
                ((shutdown-worker-v0) (return-from handle-message nil))
 
                ((start-node-v0 type recipe)
@@ -68,7 +68,7 @@ it should be okay start a node"))
                   (sb-pcl::no-applicable-method-error (e)
                     (declare (ignore e))
                     (send-msg (worker/socket worker) (worker/mmop-version worker)
-                              (mmop-w:make-start-node-failure-v0
+                              (mmop-w:start-node-failure-v0
                                type "recipe build" "worker cannot handle recipe type"))
                     t)
                   (:no-error (res)
@@ -76,7 +76,7 @@ it should be okay start a node"))
                     (let ((name (node/node-name res)))
                       (setf (gethash name (worker/nodes worker)) res)
                       (send-msg (worker/socket worker) (worker/mmop-version worker)
-                                (mmop-w:make-start-node-success-v0 type)))
+                                (mmop-w:start-node-success-v0 type)))
                     t))))))
     (unless res
       (v:error '(:worker.event-loop :mmop)

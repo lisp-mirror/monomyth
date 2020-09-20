@@ -70,7 +70,7 @@
           (pzmq:setsockopt server :identity client-name)
           (pzmq:connect server *master-uri*)
 
-          (send-msg server *mmop-v0* (mmop-w:make-worker-ready-v0))))))
+          (send-msg server *mmop-v0* mmop-w:worker-ready-v0)))))
 
   (sleep .1)
 
@@ -82,14 +82,13 @@
           (pzmq:setsockopt server :identity client-name)
           (pzmq:connect server *master-uri*)
 
-          (send-msg server *mmop-v0* (mmop-w:make-worker-ready-v0))
-          (let ((res (mmop-w:pull-worker-message server)))
-            (ok (typep res 'mmop-w:start-node-v0))
-            (ok (string= (mmop-w:start-node-v0-type res) "TEST"))
-            (let ((got-res (mmop-w:start-node-v0-recipe res)))
-              (ok (eq (node-recipe/type got-res) (node-recipe/type recipe)))
-              (ok (string= (rmq-node-recipe/source-queue got-res) (rmq-node-recipe/source-queue recipe)))
-              (ok (string= (rmq-node-recipe/dest-queue got-res) (rmq-node-recipe/dest-queue recipe)))))))))
+          (send-msg server *mmop-v0* mmop-w:worker-ready-v0)
+          (adt:match mmop-w:received-mmop (mmop-w:pull-worker-message server)
+            ((mmop-w:start-node-v0 node-test got-res)
+             (string= node-test "TEST")
+             (ok (string= (rmq-node-recipe/source-queue got-res) (rmq-node-recipe/source-queue recipe)))
+             (ok (string= (rmq-node-recipe/dest-queue got-res) (rmq-node-recipe/dest-queue recipe))))
+            (_ (fail "unexpected message type")))))))
 
   (sleep .1)
 
@@ -100,7 +99,7 @@
           (pzmq:setsockopt server :identity client-name)
           (pzmq:connect server *master-uri*)
 
-          (send-msg server *mmop-v0* (mmop-w:make-start-node-success-v0 "TEST"))
+          (send-msg server *mmop-v0* (mmop-w:start-node-success-v0 "TEST"))
           (pass "message sent")))))
 
   (sleep .1)
@@ -112,7 +111,7 @@
           (pzmq:setsockopt server :identity client-name)
           (pzmq:connect server *master-uri*)
 
-          (send-msg server *mmop-v0* (mmop-w:make-start-node-failure-v0
+          (send-msg server *mmop-v0* (mmop-w:start-node-failure-v0
                                       "TEST" "test" "test-msg"))
           (pass "send message")))))
 
@@ -125,5 +124,5 @@
           (pzmq:setsockopt server :identity client-name)
           (pzmq:connect server *master-uri*)
 
-          (send-msg server *mmop-v0* (mmop-w:make-worker-ready-v0))
+          (send-msg server *mmop-v0* mmop-w:worker-ready-v0)
           (ok (typep (mmop-w:pull-worker-message server) 'mmop-w:shutdown-worker-v0)))))))
