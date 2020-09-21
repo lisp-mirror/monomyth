@@ -70,6 +70,38 @@
           (ok (equal (pull-msg client) test-frames)))))))
 
 (deftest MMOP/0
+  (testing "ping"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (control :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt control :identity client-name)
+          (pzmq:connect control "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
+
+          (send-msg control *mmop-v0* mmop-c:ping-v0)
+          (adt:match mmop-m:received-mmop (mmop-m:pull-master-message server)
+            ((mmop-m:ping-v0 client-id) (ok (string= client-id client-name)))
+            (_ (fail "mmop message is of wrong type")))))))
+
+  (testing "pong"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (control :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt control :identity client-name)
+          (pzmq:connect control "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
+
+          (send-msg control *mmop-v0* mmop-c:ping-v0)
+          (mmop-m:pull-master-message server)
+          (send-msg server *mmop-v0* (mmop-m:pong-v0 client-name))
+          (adt:match mmop-c:received-mmop (mmop-c:pull-control-message control)
+            ((mmop-c:pong-v0) (pass "message received"))
+            (_ (fail "mmop message is of wrong type")))))))
+
   (testing "worker-ready"
     (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
           (server-name (format nil "server-~a" (uuid:make-v4-uuid))))

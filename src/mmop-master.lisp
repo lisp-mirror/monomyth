@@ -2,8 +2,10 @@
   (:nicknames :mmop-m)
   (:use :cl :rutils.bind :monomyth/mmop :monomyth/node-recipe)
   (:export pull-master-message
-           send-mmop
+           sent-mmop
            received-mmop
+           ping-v0
+           pong-v0
            worker-ready-v0
            start-node-v0
            start-node-success-v0
@@ -12,6 +14,8 @@
 (in-package :monomyth/mmop-master)
 
 (adt:defdata sent-mmop
+  ;; client-id
+  (pong-v0 string)
   ;; client-id recipe
   (start-node-v0 string node-recipe)
   ;; client-id
@@ -19,11 +23,16 @@
 
 (adt:defdata received-mmop
   ;; client-id
+  (ping-v0 string)
+  ;; client-id
   (worker-ready-v0 string)
   ;; client-id type
   (start-node-success-v0 string string)
   ;; client-id type reason-category reason-message
   (start-node-failure-v0 string string string string))
+
+(defmethod create-frames ((message pong-v0))
+  `(,(pong-v0%0 message) ,*mmop-v0* "PONG"))
 
 (defmethod create-frames ((message start-node-v0))
   (let ((recipe (start-node-v0%1 message)))
@@ -38,7 +47,7 @@
   "pulls down a message designed for the master router socket and attempts to
 translate it into an equivalent struct"
   (with (((id version &rest args) (pull-msg socket)))
-    (unless (member version *mmop-verions* :test 'string=)
+    (unless (member version *mmop-versions* :test 'string=)
       (error 'mmop-error :message
              (format nil "unrecognized mmop version: ~a" version)))
 
@@ -48,6 +57,7 @@ translate it into an equivalent struct"
 (defun translate-v0 (id args)
   "attempts to translate the arg frames into MMOP/0 structs"
   (let ((res (trivia:match args
+               ((list "PING") (ping-v0 id))
                ((list "READY") (worker-ready-v0 id))
                ((list "START-NODE-SUCCESS" node-type)
                 (start-node-success-v0 id node-type))

@@ -38,7 +38,7 @@
   "pulls down a message designed for the worker dealer socket and attempts to
 translate it into an equivalent struct"
   (with (((version &rest args) (pull-msg socket)))
-    (unless (member version *mmop-verions* :test 'string=)
+    (unless (member version *mmop-versions* :test 'string=)
       (error 'mmop-error :message
              (format nil "unrecognized mmop version: ~a" version)))
 
