@@ -1,22 +1,30 @@
 (defpackage monomyth/tests/control-api
-  (:use :cl :rove :monomyth/control-api/main :bordeaux-threads :monomyth/mmop))
+  (:use :cl :rove :monomyth/control-api/main :bordeaux-threads :monomyth/mmop
+        :monomyth/master))
 (in-package :monomyth/tests/control-api)
 
+(v:output-here *terminal-io*)
+(setf (v:repl-level) :debug)
 (defparameter *api-port* 8888)
+(defparameter *api-uri* (format nil "http://127.0.0.1:~a" *api-port*))
 (defparameter *master-port* 5000)
-(defparameter *master-uri* (format nil "localhost:~a" *master-port*))
+(defparameter *master-uri* (format nil "127.0.0.1:~a" *master-port*))
 
 (deftest startup
-  (make-thread
-   #'(lambda ()
-       (pzmq:with-context nil
-         (pzmq:with-socket master :router
-           (pzmq:bind master (format nil "tcp://*:~a" *master-port*))
+  (let ((master (start-master 2 *master-port*)))
+    (start-server *master-uri* *api-port*)
+    (stop-server)
+    (stop-master master)
+    (pass "server shutdown")))
 
-           (adt:match mmop-m:received-mmop (mmop-m:pull-master-message master)
-             ((mmop-m:ping-v0 client-id) (send-msg master *mmop-v0* (mmop-m:pong-v0 client-id)))
-             (_ (fail "unexpected message type")))))))
+(deftest ping-endpoint
+  (let ((master (start-master 2 *master-port*))
+        (uri (quri:uri *api-uri*)))
+    (start-server *master-uri* *api-port*)
 
-  (start-server *master-uri* *api-port*)
-  (stop-server)
-  (pass "server shutdown"))
+    (setf (quri:uri-path uri) "/ping")
+    (ok (string= (dex:get uri) "pong"))
+
+    (stop-server)
+    (stop-master master)
+    (pass "server shutdown")))

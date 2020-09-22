@@ -55,6 +55,8 @@
   :depends-on (:monomyth
                :monomyth/control-api
                :rove
+               :quri
+               :dexador
                :cl-mock)
   :components ((:module "tests"
                 :components
@@ -66,9 +68,9 @@
                   :depends-on ("utils"))
                  (:file "rmq-worker"
                   :depends-on ("utils"))
-                 (:file "control-api")
                  (:file "master"
-                  :depends-on ("utils")))))
+                  :depends-on ("utils"))
+                 (:file "control-api"))))
   :description "Test system for monomyth"
   :perform (test-op (op c) (symbol-call :rove '#:run c)))
 
