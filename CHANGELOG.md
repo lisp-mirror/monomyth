@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Control REST API that allows users to manage the system.
+- Control REST API now has ping endpoint.
 
 ### Changed
 - MMOP structs changed to ADTs.
+- Master worker threads no using router sockets (allowing for bi-directional communication 
+  through the router), but the load balancing is round-robin.
 
 ## [0.1.0] - 2020-09-13
 ### Added

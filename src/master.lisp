@@ -15,7 +15,6 @@
 
 (setf *arity-check-by-test-call* nil)
 (defparameter *internal-conn-name* "inproc://mmop-master-routing")
-(defparameter *ready-message* "READY")
 (defparameter *end-message* "END")
 (defparameter *router-thread-name* "monomyth-master-router")
 (defparameter *worker-thread-prefix* "monomyth-worker-thread")
@@ -49,14 +48,12 @@ and a table of node type symbols to node recipes"
   (v:info :master "starting master server with ~a threads listening for workers at port ~a"
           thread-count client-port)
   (let ((master (build-master)))
-    (let ((socket (pzmq:socket (master-context master) :router)))
-      (atomic (setf (master-outbound-socket master) socket))
-      (pzmq:bind socket (format nil "tcp://*:~a" client-port)))
+    (let ((thread-names
+            (iter:iterate
+              (iter:repeat thread-count)
+              (iter:collect (start-handler-thread master)))))
+      (start-router-loop master client-port thread-count thread-names))
 
-    (iter:iterate
-      (iter:repeat thread-count)
-      (start-handler-thread master))
-    (start-router-loop master thread-count)
     master))
 
 (defun stop-master (master)
@@ -70,26 +67,48 @@ and a table of node type symbols to node recipes"
                                       (rtl:starts-with *worker-thread-prefix* th-name))))
                  (bt:all-threads)))
       (bt:destroy-thread th))
-    (pzmq:close (master-outbound-socket master))
     (pzmq:ctx-destroy context)))
 
-(defun start-router-loop (master thread-count)
+(defun start-router-loop (master client-port thread-count thread-names)
   "runs the thread router's event loop in a new thread"
   (bt:make-thread
    #'(lambda ()
-       (pzmq:with-socket (threads (master-context master)) :router
+       (pzmq:with-sockets (((threads (master-context master)) :router)
+                           ((clients (master-context master)) :router))
          (pzmq:bind threads *internal-conn-name*)
+         (atomic (setf (master-outbound-socket master) clients))
+         (pzmq:bind clients (format nil "tcp://*:~a" client-port))
 
-         (iter:iterate
-           (iter:while (master-running master))
-           (iter:for worker-id = (first (handle-pull-msg threads "get-thread")))
-           (unless worker-id (iter:next-iteration))
-           (iter:for msg-frames = (handle-pull-msg (master-outbound-socket master) "get-msg"))
-           (unless msg-frames (iter:next-iteration))
-           (forward-frames-to-worker threads worker-id msg-frames)
+         (pzmq:with-poll-items items (threads clients)
+           (iter:iterate
+             (iter:with wrker-count = 0)
+             (iter:while (master-running master))
+             (pzmq:poll items)
 
-           (iter:finally (end-threads threads thread-count)))))
+             (when (member :pollin (pzmq:revents items 0))
+              (route-outgoing-message master threads))
+
+             (when (member :pollin (pzmq:revents items 1))
+               (route-incoming-message
+                master threads (nth (mod wrker-count thread-count) thread-names))
+               (incf wrker-count))
+
+             (iter:finally (end-threads threads thread-count))))))
    :name *router-thread-name*))
+
+(defun route-outgoing-message (master threads)
+  (let ((frames (handle-pull-msg threads "get-inbound-msg")))
+    (v:debug '(:master.router.outgoing)
+             "received message: (~{~a~^, ~})" frames)
+    (forward-frames-to-client (master-outbound-socket master) frames)
+    (v:debug '(:master.router.outgoing) "forwarded message to client")))
+
+(defun route-incoming-message (master threads worker-id)
+  (let ((msg-frames (handle-pull-msg (master-outbound-socket master) "get-inbound-msg")))
+    (v:debug '(:master.router.incoming)
+             "received message: (~{~a~^, ~})" msg-frames)
+    (forward-frames-to-worker threads worker-id msg-frames)
+    (v:debug '(:master.router.incoming) "forwarded message to worker")))
 
 (defun end-threads (socket thread-count)
   "sends a message to all threads, allowing them to cycle and so to quit"
@@ -98,11 +117,18 @@ and a table of node type symbols to node recipes"
     (iter:for worker-id = (first (handle-pull-msg socket "get-thread")))
     (forward-frames-to-worker socket worker-id `(,*end-message* ,*end-message*))))
 
+(defun forward-frames-to-client (socket frames)
+  "drops unneeded frames and sends them to the client"
+  (handler-case (send-msg-frames socket *mmop-v0* (cdr frames))
+    (mmop-error (c)
+      (v:error '(:master.router :mmop) "could not forward outbound message: ~a"
+               (mmop-error/message c)))))
+
 (defun forward-frames-to-worker (socket thread-id frames)
   "constructs the message frames and sends them on to the thread"
-  (handler-case (send-msg-frames socket nil (append `(,thread-id "") frames))
+  (handler-case (send-msg-frames socket *mmop-v0* (cons thread-id frames))
     (mmop-error (c)
-      (v:error '(:master.router :mmop) "could not forward message: ~a"
+      (v:error '(:master.router :mmop) "could not forward inbound message: ~a"
                (mmop-error/message c)))))
 
 (defun handle-pull-msg (socket step)
@@ -119,23 +145,25 @@ and a table of node type symbols to node recipes"
   (let ((idenifier (format nil "~a-~a" *worker-thread-prefix* (uuid:make-v4-uuid))))
     (bt:make-thread
      #'(lambda ()
-         (pzmq:with-socket (router (master-context master)) :req
+         (pzmq:with-socket (router (master-context master)) :dealer
            (pzmq:setsockopt router :identity idenifier)
            (pzmq:connect router *internal-conn-name*)
 
            (iter:iterate
              (iter:while (master-running master))
-             (pzmq:send router *ready-message*)
-             (handler-case (handle-message master (mmop-m:pull-master-message router))
+             (handler-case (handle-message master router (mmop-m:pull-master-message router))
                (mmop-error (c)
                  (v:error '(:master.handler :mmop)
                           "could not pull MMOP message (version: ~a): ~a"
                           (mmop-error/version c) (mmop-error/message c)))))))
-     :name idenifier)))
+     :name idenifier)
+    idenifier))
 
-(defun handle-message (master mmop-msg)
+(defun handle-message (master socket mmop-msg)
   "handles a specific message for the master, return t if the master should continue"
   (let ((res (adt:match received-mmop mmop-msg
+               ((ping-v0 client-id) (send-pong-v0 socket client-id))
+
                ((worker-ready-v0 client-id)
                 (add-worker master client-id))
 
@@ -149,6 +177,12 @@ and a table of node type symbols to node recipes"
       (v:error '(:master.handler.event-loop :mmop)
                "did not recognize [~a] in worker event loop" mmop-msg))
     t))
+
+(defun send-pong-v0 (socket client-id)
+  (v:debug '(:master.handler.ping) "got message (~a)" client-id)
+  (send-msg socket *mmop-v0* (pong-v0 client-id))
+  (v:debug '(:master.handler.ping) "sent pong")
+  t)
 
 (defun start-unsuccessful (master client-id type-id cat msg)
   "removes the record of the outstanding request"

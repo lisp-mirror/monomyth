@@ -47,6 +47,8 @@
   "pulls down a message designed for the master router socket and attempts to
 translate it into an equivalent struct"
   (with (((id version &rest args) (pull-msg socket)))
+    (v:debug '(:mmop :master) "pulled message (~{~a~^, ~}) from ~a with MMOP version ~a"
+             args id version)
     (unless (member version *mmop-versions* :test 'string=)
       (error 'mmop-error :message
              (format nil "unrecognized mmop version: ~a" version)))
