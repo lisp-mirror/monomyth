@@ -128,31 +128,46 @@
    is the MMOP version.
 
 *** Defined Messages
+**** Ping [ping]
+
+    The ping message is sent by the control server to make sure the master server
+    is up.
+    Results in a pong message.
+
+    Frames:
+    1. ~PING~
+
+**** Pong [pong]
+
+    The pong message is sent by the master server to answer the ping message.
+
+    Frames:
+    1. ~PONG~
 
 **** Worker Ready [worker-ready]
 
-     The worker-ready message is sent from a worker server to the master server
-     to indicate that it is up and ready to start nodes.
-     No confirmation message is sent.
+    The worker-ready message is sent from a worker server to the master server
+    to indicate that it is up and ready to start nodes.
+    No confirmation message is sent.
 
-     Frames:
-     1. ~READY~
+    Frames:
+    1. ~READY~
 
 **** Start Node [start-node]
 
-     The start-node message is sent from the master server to a worker using
-     the supplied recipe.
-     The supplied recipe (~<recipe byte array>~) is the result of serializing the
-     recipe object using ~cl-store~ and ~flexi-streams~.
-     The recipe sent is an object that is the child of some node type that can talk
-     to a data stream (for instance the ~rmq-node~).
-     The worker *must* know this recipe class in advance, or the node creation will
-     fail.
+    The start-node message is sent from the master server to a worker using
+    the supplied recipe.
+    The supplied recipe (~<recipe byte array>~) is the result of serializing the
+    recipe object using ~cl-store~ and ~flexi-streams~.
+    The recipe sent is an object that is the child of some node type that can talk
+    to a data stream (for instance the ~rmq-node~).
+    The worker *must* know this recipe class in advance, or the node creation will
+    fail.
 
-     Frames:
-     1. ~START-NODE~
-     2. ~<recipe type>~
-     3. ~<recipe byte array>~
+    Frames:
+    1. ~START-NODE~
+    2. ~<recipe type>~
+    3. ~<recipe byte array>~
 
 **** Start Node Succeeded [start-node-success]
 

@@ -10,6 +10,8 @@
                   :components ("mmop" "node-recipe"))
                  (:file "mmop-master"
                   :components ("mmop" "node-recipe"))
+                 (:file "mmop-control"
+                  :components ("mmop" "node-recipe"))
                  (:file "node")
                  (:file "rmq-node"
                   :depends-on ("node"))
@@ -37,10 +39,21 @@
   :description "A distributed data processing library for CL"
   :in-order-to ((test-op (test-op "monomyth/tests"))))
 
+(defsystem "monomyth/control-api"
+  :author "Paul Ricks"
+  :license "MPL 2.0"
+  :depends-on (:monomyth
+               :lucerne
+               :woo)
+  :components ((:module "src/control-api"
+                :components ((:file "main"))))
+  :description "Control rest api for monomyth")
+
 (defsystem "monomyth/tests"
   :author "Paul Ricks"
-  :license "MPL 2.2"
+  :license "MPL 2.0"
   :depends-on (:monomyth
+               :monomyth/control-api
                :rove
                :cl-mock)
   :components ((:module "tests"
@@ -53,6 +66,7 @@
                   :depends-on ("utils"))
                  (:file "rmq-worker"
                   :depends-on ("utils"))
+                 (:file "control-api")
                  (:file "master"
                   :depends-on ("utils")))))
   :description "Test system for monomyth"
