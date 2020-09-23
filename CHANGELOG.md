@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - MMOP structs changed to ADTs.
-- Master worker threads no using router sockets (allowing for bi-directional communication 
+- Master worker threads now using dealer sockets (allowing for bi-directional communication 
   through the router), but the load balancing is round-robin.
 
 ## [0.1.0] - 2020-09-13
