@@ -2,21 +2,29 @@
   (:use :cl :monomyth/rmq-worker :monomyth/rmq-node-recipe :monomyth/rmq-node
         :monomyth/node :monomyth/worker :stmx :monomyth/node-recipe)
   (:shadow :closer-mop)
-  (:export testing-node
-           testing-node1
-           testing-node2
-           testing-node3
-           test-recipe
-           test-recipe1
-           test-recipe2
-           test-recipe3
-           build-test-node
-           build-test-node1
-           build-test-recipe
-           build-test-recipe1
-           build-test-recipe2
-           build-test-recipe3))
+  (:export
+   *rmq-host*
+   *rmq-user*
+   *rmq-pass*
+   testing-node
+   testing-node1
+   testing-node2
+   testing-node3
+   test-recipe
+   test-recipe1
+   test-recipe2
+   test-recipe3
+   build-test-node
+   build-test-node1
+   build-test-recipe
+   build-test-recipe1
+   build-test-recipe2
+   build-test-recipe3))
 (in-package :monomyth/tests/utils)
+
+(defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
+(defparameter *rmq-user* (uiop:getenv "TEST_RMQ_DEFAULT_USER"))
+(defparameter *rmq-pass* (uiop:getenv "TEST_RMQ_DEFAULT_PASS"))
 
 (transactional
     (defclass testing-node (rmq-node) ()))

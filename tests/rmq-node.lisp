@@ -9,9 +9,6 @@
 (defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
 (defparameter *fail-queue* (format nil "test-fail-~d" (get-universal-time)))
 (defparameter *final-queue* (format nil "test-final-~d" (get-universal-time)))
-(defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
-(defparameter *rmq-user* (uiop:getenv "TEST_RMQ_DEFAULT_USER"))
-(defparameter *rmq-pass* (uiop:getenv "TEST_RMQ_DEFAULT_PASS"))
 
 (teardown
   (let ((conn (setup-connection :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))

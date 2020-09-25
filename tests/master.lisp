@@ -12,9 +12,6 @@
 (defparameter queue-2 (format nil "process-test-~a-2" (get-universal-time)))
 (defparameter queue-3 (format nil "process-test-~a-3" (get-universal-time)))
 (defparameter queue-4 (format nil "process-test-~a-4" (get-universal-time)))
-(defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
-(defparameter *rmq-user* (uiop:getenv "TEST_RMQ_DEFAULT_USER"))
-(defparameter *rmq-pass* (uiop:getenv "TEST_RMQ_DEFAULT_PASS"))
 (v:output-here *terminal-io*)
 
 (teardown

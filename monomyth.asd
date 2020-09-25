@@ -28,6 +28,8 @@
                :closer-mop
                :rutils
                :trivia
+               :jonathan
+               :fset
                :alexandria
                :cl-algebraic-data-type
                :pzmq
