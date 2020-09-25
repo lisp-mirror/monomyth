@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Control REST API that allows users to manage the system.
-- Control REST API now has ping endpoint.
+- Control REST API ping endpoint.
+- Control REST API recipe-info endpoint.
 
 ### Changed
 - MMOP structs changed to ADTs.
