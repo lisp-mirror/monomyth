@@ -1,6 +1,6 @@
 (defpackage monomyth/master
   (:use :cl :stmx :stmx.util :monomyth/mmop :monomyth/node-recipe :trivia
-        :monomyth/mmop-master)
+        :monomyth/mmop-master :jonathan)
   (:export start-master
            stop-master
            master-workers
@@ -164,6 +164,9 @@ and a table of node type symbols to node recipes"
   (let ((res (adt:match received-mmop mmop-msg
                ((ping-v0 client-id) (send-pong-v0 socket client-id))
 
+               ((recipe-info-v0 client-id)
+                (send-recipe-info-response-v0 master socket client-id))
+
                ((worker-ready-v0 client-id)
                 (add-worker master client-id))
 
@@ -218,6 +221,58 @@ and a table of node type symbols to node recipes"
   (atomic
    (setf (get-ghash (master-workers master) client-id)
          (build-worker-info))))
+
+(transaction
+    (defun pull-worker-type-running-info (worker)
+      "takes a worker-info and produces an fset map that links each recipe type
+to a plist with :running"
+      (reduce #'(lambda (acc val) (fset:with acc (car val) `(:|running| ,(cdr val))))
+              (ghash-pairs (worker-info-type-counts worker))
+              :initial-value (fset:empty-map))))
+
+(transaction
+    (defun pull-worker-type-queued-info (worker)
+      "takes a worker-info and produces an fset map that links each recipe type
+to a plist with :queued"
+      (reduce #'(lambda (acc val) (fset:with acc (car val) `(:|queued| ,(cdr val))))
+              (ghash-pairs (worker-info-outstanding-request-counts worker))
+              :initial-value (fset:empty-map))))
+
+(transaction
+    (defun pull-worker-type-info (worker)
+      "takes a worker-info and produces an fset map that links each recipe type
+to a plist with :running and :queued"
+      (fset:map-union (pull-worker-type-queued-info worker)
+                      (pull-worker-type-running-info worker)
+                      #'append)))
+
+(defun combine-type-plist (l1 l2)
+  "takes two type count plists and combines the counts"
+  (flet ((add-property (prop) (+ (getf l1 prop 0) (getf l2 prop 0))))
+    `(:|running| ,(add-property :|running|) :|queued| ,(add-property :|queued|))))
+
+(transaction
+    (defun pull-master-type-info (master)
+      "takes a master object and produces an fset map that links each recipe type
+to a plist with :running and :queued"
+      (reduce
+       #'(lambda (acc val) (fset:map-union acc val #'combine-type-plist))
+       (mapcar #'pull-worker-type-info (ghash-values (master-workers master)))
+       :initial-value (fset:empty-map))))
+
+(defun send-recipe-info-response-v0 (master socket client-id)
+  (let ((info-map (atomic (pull-master-type-info master))))
+    (send-msg
+     socket *mmop-v0*
+     (recipe-info-response-v0
+      client-id
+      (to-json
+       (fset:reduce
+        #'(lambda (acc key val)
+            (append `((:|type| ,key :|counts| ,val)) acc))
+        info-map
+        :initial-value '())))))
+  t)
 
 (transaction
     (defun total-posible-nodes (worker type-id)

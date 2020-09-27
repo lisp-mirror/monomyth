@@ -144,6 +144,24 @@
     Frames:
     1. ~PONG~
 
+**** Recipe Info [recipe-info]
+
+    The recipe-info is sent by the control server to the master server.
+    It results in a recipe-info-response.
+
+    Frames:
+    1. ~RECIPE-INFO~
+
+**** Recipe Info Response [recipe-info-response]
+
+    The recipe-info-response is sent by the master server to the control server
+    in response to the recipe-info message.
+    It reports the current recipes in use and how many are used in active nodes.
+
+    Frames:
+    1. ~RECIPE-INFO-RESPONSE~
+    2. ~<response-json>~
+
 **** Worker Ready [worker-ready]
 
     The worker-ready message is sent from a worker server to the master server

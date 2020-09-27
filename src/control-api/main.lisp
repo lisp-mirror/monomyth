@@ -37,7 +37,20 @@
         (send-msg master *mmop-v0* mmop-c:ping-v0)
         (adt:match received-mmop (pull-control-message master)
           ((pong-v0) (respond "pong"))
-          (_ (v:error :control-api.ping "unexpected message in ping"))))))
+          (_ (v:error :control-api.ping "unexpected MMOP message")
+             (respond nil :status 500))))))
+
+  (define-route server "/recipe-info" :get
+    (defview recipe-info ()
+      (pzmq:with-socket (master *zmq-context*) :dealer
+        (pzmq:setsockopt master :identity (build-api-name))
+        (pzmq:connect master (format nil "tcp://~a" master-uri))
+
+        (send-msg master *mmop-v0* mmop-c:recipe-info-v0)
+        (adt:match received-mmop (pull-control-message master)
+          ((recipe-info-response-v0 json) (respond json))
+          (_ (v:error :control-api.recipe-info "unexpected MMOP message")
+             (respond nil :status 500))))))
 
   (start server :server :woo :port port))
 

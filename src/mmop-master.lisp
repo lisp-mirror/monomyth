@@ -5,7 +5,9 @@
            sent-mmop
            received-mmop
            ping-v0
+           recipe-info-v0
            pong-v0
+           recipe-info-response-v0
            worker-ready-v0
            start-node-v0
            start-node-success-v0
@@ -16,6 +18,8 @@
 (adt:defdata sent-mmop
   ;; client-id
   (pong-v0 string)
+  ;; client-id json-response
+  (recipe-info-response-v0 string string)
   ;; client-id recipe
   (start-node-v0 string node-recipe)
   ;; client-id
@@ -25,6 +29,8 @@
   ;; client-id
   (ping-v0 string)
   ;; client-id
+  (recipe-info-v0 string)
+  ;; client-id
   (worker-ready-v0 string)
   ;; client-id type
   (start-node-success-v0 string string)
@@ -33,6 +39,10 @@
 
 (defmethod create-frames ((message pong-v0))
   `(,(pong-v0%0 message) ,*mmop-v0* "PONG"))
+
+(defmethod create-frames ((message recipe-info-response-v0))
+  `(,(recipe-info-response-v0%0 message) ,*mmop-v0* "RECIPE-INF0-RESPONSE"
+    ,(recipe-info-response-v0%1 message)))
 
 (defmethod create-frames ((message start-node-v0))
   (let ((recipe (start-node-v0%1 message)))
@@ -60,6 +70,7 @@ translate it into an equivalent struct"
   "attempts to translate the arg frames into MMOP/0 structs"
   (let ((res (trivia:match args
                ((list "PING") (ping-v0 id))
+               ((list "RECIPE-INFO") (recipe-info-v0 id))
                ((list "READY") (worker-ready-v0 id))
                ((list "START-NODE-SUCCESS" node-type)
                 (start-node-success-v0 id node-type))
