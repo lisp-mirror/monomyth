@@ -171,6 +171,34 @@
     Frames:
     1. ~READY~
 
+**** Start Node Request [start-node-request]
+
+    The start-node-request message is sent from the control api to the master
+    server and indicates that the master should tell a worker to start up a node
+    of the supplied ~recipe-type~.
+    This is an asynchronous operation and should result in a 202.
+
+    Frames:
+    1. ~START-NODE-REQUEST~
+    2. ~<recipe-type>~
+
+**** Start Node Request Succeeded [start-node-request-success]
+
+    The start-node-request-success indicates that the master server has received
+    the request and succeeded in sending a request to a worker server.
+
+    Frames:
+    1. ~START-NODE-REQUEST-SUCCESS~
+
+**** Start Node Request Failed [start-node-request-failure]
+
+    The start-node-request-failure indicates that the master server has received
+    the request but was unable to act on it for some ~failure-reason~.
+
+    Frames:
+    1. ~START-NODE-REQUEST-FAILED~
+    2. ~<failure-reason>~
+
 **** Start Node [start-node]
 
     The start-node message is sent from the master server to a worker using

@@ -6,8 +6,11 @@
            received-mmop
            ping-v0
            recipe-info-v0
+           start-node-request-v0
            pong-v0
            recipe-info-response-v0
+           start-node-request-success-v0
+           start-node-request-failure-v0
            worker-ready-v0
            start-node-v0
            start-node-success-v0
@@ -18,6 +21,10 @@
 (adt:defdata sent-mmop
   ;; client-id
   (pong-v0 string)
+  ;; client-id
+  (start-node-request-success-v0 string)
+  ;; client-id error-reason
+  (start-node-request-failure-v0 string string)
   ;; client-id json-response
   (recipe-info-response-v0 string string)
   ;; client-id recipe
@@ -30,6 +37,8 @@
   (ping-v0 string)
   ;; client-id
   (recipe-info-v0 string)
+  ;; client-id recipe-type
+  (start-node-request-v0 string string)
   ;; client-id
   (worker-ready-v0 string)
   ;; client-id type
@@ -43,6 +52,13 @@
 (defmethod create-frames ((message recipe-info-response-v0))
   `(,(recipe-info-response-v0%0 message) ,*mmop-v0* "RECIPE-INF0-RESPONSE"
     ,(recipe-info-response-v0%1 message)))
+
+(defmethod create-frames ((message start-node-request-success-v0))
+  `(,(start-node-request-success-v0%0 message) ,*mmop-v0* "START-NODE-REQUEST-SUCCESS"))
+
+(defmethod create-frames ((message start-node-request-failure-v0))
+  `(,(start-node-request-failure-v0%0 message) ,*mmop-v0* "START-NODE-REQUEST-FAILURE"
+    ,(start-node-request-failure-v0%1 message)))
 
 (defmethod create-frames ((message start-node-v0))
   (let ((recipe (start-node-v0%1 message)))
@@ -71,6 +87,8 @@ translate it into an equivalent struct"
   (let ((res (trivia:match args
                ((list "PING") (ping-v0 id))
                ((list "RECIPE-INFO") (recipe-info-v0 id))
+               ((list "START-NODE-REQUEST" recipe-type)
+                (start-node-request-v0 id recipe-type))
                ((list "READY") (worker-ready-v0 id))
                ((list "START-NODE-SUCCESS" node-type)
                 (start-node-success-v0 id node-type))

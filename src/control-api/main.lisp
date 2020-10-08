@@ -1,6 +1,6 @@
 (defpackage monomyth/control-api/main
   (:use :cl :lucerne :uuid :monomyth/mmop-control :monomyth/mmop
-   :bordeaux-threads)
+   :bordeaux-threads :jonathan :stmx)
   (:import-from :lucerne.views :define-route)
   (:export run-server
            start-server
@@ -21,7 +21,7 @@
 
   (pzmq:with-socket (master *zmq-context*) :dealer
     (pzmq:setsockopt master :identity (build-api-name))
-    (pzmq:connect master (format nil "tcp://~a" master-uri))
+    (pzmq:connect master master-uri)
 
     (send-msg master *mmop-v0* mmop-c:ping-v0)
     (adt:match received-mmop (pull-control-message master)
@@ -32,7 +32,7 @@
     (defview ping ()
       (pzmq:with-socket (master *zmq-context*) :dealer
         (pzmq:setsockopt master :identity (build-api-name))
-        (pzmq:connect master (format nil "tcp://~a" master-uri))
+        (pzmq:connect master master-uri)
 
         (send-msg master *mmop-v0* mmop-c:ping-v0)
         (adt:match received-mmop (pull-control-message master)
@@ -40,11 +40,33 @@
           (_ (v:error :control-api.ping "unexpected MMOP message")
              (respond nil :status 500))))))
 
+  (define-route server "/start-node/:node-type" :post
+    (defview start-node (node-type)
+      (pzmq:with-socket (master *zmq-context*) :dealer
+        (pzmq:setsockopt master :identity (build-api-name))
+        (pzmq:connect master master-uri)
+
+        (send-msg master *mmop-v0* (mmop-c:start-node-request-v0 node-type))
+        (adt:match received-mmop (pull-control-message master)
+          ((start-node-request-success-v0)
+           (respond (to-json '(:|request_sent_to_worker| t))
+                    :type "application/json"
+                    :status 201))
+
+          ((start-node-request-failure-v0 msg)
+           (respond (to-json `(:|request_sent_to_worker| :false
+                                :|error_message| ,msg))
+                    :type "application/json"
+                    :status 400))
+
+          (_ (v:error :control-api.ping "unexpected MMOP message")
+             (respond nil :status 500))))))
+
   (define-route server "/recipe-info" :get
     (defview recipe-info ()
       (pzmq:with-socket (master *zmq-context*) :dealer
         (pzmq:setsockopt master :identity (build-api-name))
-        (pzmq:connect master (format nil "tcp://~a" master-uri))
+        (pzmq:connect master master-uri)
 
         (send-msg master *mmop-v0* mmop-c:recipe-info-v0)
         (adt:match received-mmop (pull-control-message master)

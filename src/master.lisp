@@ -167,6 +167,9 @@ and a table of node type symbols to node recipes"
                ((recipe-info-v0 client-id)
                 (send-recipe-info-response-v0 master socket client-id))
 
+               ((start-node-request-v0 client-id recipe-type)
+                (ask-to-start-node master socket client-id recipe-type))
+
                ((worker-ready-v0 client-id)
                 (add-worker master client-id))
 
@@ -305,34 +308,59 @@ to a plist with :running and :queued"
                        (symbol-name (node-recipe/type recipe)))
             recipe)))
 
-(defun ask-to-start-node (master type-id)
+(defun start-node (master socket client-id type-id recipe)
+  "Sends the start node request to a client with the supplied recipe"
+  (handler-case
+      (let ((worker-id (determine-worker-for-node master type-id)))
+        (send-msg socket *mmop-v0* (start-node-v0 worker-id recipe))
+        (atomic
+         (let ((val (get-ghash
+                     (worker-info-outstanding-request-counts
+                      (get-ghash (master-workers master) worker-id))
+                     type-id 0)))
+           (setf (get-ghash
+                  (worker-info-outstanding-request-counts
+                   (get-ghash (master-workers master) worker-id))
+                  type-id)
+                 (1+ val))))
+        (send-msg socket *mmop-v0* (start-node-request-success-v0 client-id))
+        t)
+
+    (mmop-error (c)
+      (progn
+        (v:error :master.handler
+                 "could not send start node message (mmop version: ~a): ~a"
+                 (mmop-error/version c) (mmop-error/message c))
+        nil))))
+
+(defun confirm-start-node-failure (socket client-id message)
+  "Sends a request failure message to the client with the supplied message."
+  (handler-case
+      (send-msg socket *mmop-v0* (start-node-request-failure-v0 client-id message))
+
+    (mmop-error (c)
+      (v:error :master.handler
+               "could not send start node failed message (mmop version: ~a): ~a"
+               (mmop-error/version c) (mmop-error/message c)))))
+
+(defun ask-to-start-node (master socket client-id type-id)
   "attempts to start a node of type-id on one of the masters workers.
 returns t if it works, nil otherwise"
+  (v:info :master "requesting to start node ~a" type-id)
   (let ((recipe (get-ghash (master-recipes master) type-id)))
-    (if recipe
-        (handler-case
-            (let ((worker-id (determine-worker-for-node master type-id)))
-              (send-msg (master-outbound-socket master) *mmop-v0*
-                        (start-node-v0 worker-id recipe))
-              (atomic
-               (let ((val (get-ghash
-                           (worker-info-outstanding-request-counts
-                            (get-ghash (master-workers master) worker-id))
-                           type-id 0)))
-                 (setf (get-ghash
-                        (worker-info-outstanding-request-counts
-                         (get-ghash (master-workers master) worker-id))
-                        type-id)
-                       (1+ val))))
-              t)
-          (mmop-error (c)
-            (progn
-              (v:error :master.handler
-                       "could not send start node message (mmop version: ~a): ~a"
-                       (mmop-error/version c) (mmop-error/message c))
-              nil)))
-        (progn (v:error :master.handler "could not find recipe type ~a" type-id)
-               nil))))
+    (cond
+      ((ghash-table-empty? (master-workers master))
+       (let ((msg "no active worker servers"))
+         (v:error :master.handler.start-node msg)
+         (confirm-start-node-failure socket client-id msg)
+         nil))
+
+      (recipe (start-node master socket client-id type-id recipe))
+
+      (t (let ((msg (format nil "could not find recipe type ~a" type-id)))
+           (v:error :master.handler.start-node msg)
+           (confirm-start-node-failure socket client-id msg)
+           nil)))))
 
 (defun ask-to-shutdown-worker (master worker-id)
   "uses a master to tell a worker to shutdown via MMOP.
