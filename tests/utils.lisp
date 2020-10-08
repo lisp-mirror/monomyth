@@ -1,6 +1,6 @@
 (defpackage monomyth/tests/utils
   (:use :cl :monomyth/rmq-worker :monomyth/rmq-node-recipe :monomyth/rmq-node
-        :monomyth/node :monomyth/worker :stmx :monomyth/node-recipe)
+        :monomyth/node :monomyth/worker :stmx :monomyth/node-recipe :rove)
   (:shadow :closer-mop)
   (:export
    *rmq-host*
@@ -19,7 +19,8 @@
    build-test-recipe
    build-test-recipe1
    build-test-recipe2
-   build-test-recipe3))
+   build-test-recipe3
+   test-request-success))
 (in-package :monomyth/tests/utils)
 
 (defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
@@ -121,3 +122,8 @@
                     (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
                     (node-recipe/batch-size recipe) (rmq-worker/host worker)
                     (rmq-worker/username worker) (rmq-worker/password worker)))
+
+(defun test-request-success (socket)
+  (adt:match mmop-c:received-mmop (mmop-c:pull-control-message socket)
+    ((mmop-c:start-node-request-success-v0) (pass "request succeeded message"))
+    (_ (fail "unexpected message type"))))

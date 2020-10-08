@@ -38,6 +38,7 @@
 
 (deftest can-handle-worker-messages
   (let* ((master (start-master 2 55555))
+         (uri "tcp://localhost:55555")
          (client1-name (format nil "client-~a" (uuid:make-v4-uuid)))
          (client2-name (format nil "client-~a" (uuid:make-v4-uuid)))
          (client3-name (format nil "client-~a" (uuid:make-v4-uuid)))
@@ -51,10 +52,17 @@
       (pzmq:setsockopt client1 :identity client1-name)
       (pzmq:setsockopt client2 :identity client2-name)
       (pzmq:setsockopt client3 :identity client3-name)
-      (pzmq:connect client1 "tcp://localhost:55555")
-      (pzmq:connect client2 "tcp://localhost:55555")
-      (pzmq:connect client3 "tcp://localhost:55555")
+      (pzmq:connect client1 uri)
+      (pzmq:connect client2 uri)
+      (pzmq:connect client3 uri)
       (sleep .1)
+
+      (testing "start-node no workers"
+        (send-msg client1 *mmop-v0* (mmop-c:start-node-request-v0 "test"))
+        (adt:match mmop-c:received-mmop (mmop-c:pull-control-message client1)
+          ((mmop-c:start-node-request-failure-v0 msg)
+           (ok (string= msg "no active worker servers")))
+          (_ (fail "unexpected message type"))))
 
       (testing "worker-ready-v0"
         (send-msg client1 *mmop-v0* mmop-w:worker-ready-v0)
@@ -78,7 +86,8 @@
 
       (let ((c1-reqs nil)
             (c2-reqs nil)
-            (c3-reqs nil))
+            (c3-reqs nil)
+            (client-name (format nil "node-client-~a" (uuid:make-v4-uuid))))
         (testing "asking to start node"
           (pzmq:with-poll-items items (client1 client2 client3)
             (labels ((test-clients-got-message (type-id recipe)
@@ -101,22 +110,36 @@
 
                          (t (fail "message not received")))))
 
-              (ok (ask-to-start-node master "TEST1"))
-              (sleep .1)
-              (test-clients-got-message "TEST1" recipe1)
-              (ok (ask-to-start-node master "TEST1"))
-              (sleep .1)
-              (test-clients-got-message "TEST1" recipe1)
-              (ok (ask-to-start-node master "TEST1"))
-              (sleep .1)
-              (test-clients-got-message "TEST1" recipe1)
-              (ok (ask-to-start-node master "TEST1"))
-              (sleep .1)
-              (test-clients-got-message "TEST1" recipe1)
-              (ok (ask-to-start-node master "TEST2"))
-              (sleep .1)
-              (test-clients-got-message "TEST2" recipe2)
-              (ng (ask-to-start-node master "TEST3"))
+              (pzmq:with-context nil
+                (pzmq:with-socket client :dealer
+                  (pzmq:setsockopt client :identity client-name)
+                  (pzmq:connect client uri)
+
+                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
+                  (sleep .1)
+                  (test-clients-got-message "TEST1" recipe1)
+                  (test-request-success client)
+                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
+                  (sleep .1)
+                  (test-clients-got-message "TEST1" recipe1)
+                  (test-request-success client)
+                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
+                  (sleep .1)
+                  (test-clients-got-message "TEST1" recipe1)
+                  (test-request-success client)
+                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
+                  (sleep .1)
+                  (test-clients-got-message "TEST1" recipe1)
+                  (test-request-success client)
+                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST2"))
+                  (sleep .1)
+                  (test-clients-got-message "TEST2" recipe2)
+                  (test-request-success client)
+                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST3"))
+                  (adt:match mmop-c:received-mmop (mmop-c:pull-control-message client)
+                    ((mmop-c:start-node-request-failure-v0 _)
+                     (pass "request succeeded message"))
+                    (_ (fail "unexpected message type")))))
 
               (test-master-state-after-asks master client1-name c1-reqs)
               (test-master-state-after-asks master client2-name c2-reqs)
@@ -155,7 +178,7 @@
   (adt:match mmop-w:received-mmop (mmop-w:pull-worker-message socket)
     ((mmop-w:start-node-v0 node-type got-recipe)
      (ok (string= type-id node-type))
-      (ok (eq (node-recipe/type recipe) (node-recipe/type got-recipe))))
+     (ok (eq (node-recipe/type recipe) (node-recipe/type got-recipe))))
     (_ (fail "unexpected message type"))))
 
 (defun test-master-state-after-asks (master client-id reqs)
@@ -207,18 +230,27 @@
       (shutdown work-node)
 
       (let* ((client-port 55555)
+             (uri (format nil "tcp://localhost:~a" client-port))
+             (client-name (format nil "node-client-~a" (uuid:make-v4-uuid)))
              (recipe1 (build-test-recipe *source-queue* *dest-queue*))
              (master (start-master 2 client-port))
              (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
         (bt:make-thread #'(lambda ()
-                            (start-worker worker (format nil "tcp://localhost:~a" client-port))
+                            (start-worker worker uri)
                             (run-worker worker)
                             (stop-worker worker)
                             (pass "worker-stopped")))
 
         (sleep .1)
         (add-recipe master recipe1)
-        (ok (ask-to-start-node master "TEST"))
+
+        (pzmq:with-context nil
+          (pzmq:with-socket client :dealer
+            (pzmq:setsockopt client :identity client-name)
+            (pzmq:connect client uri)
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST"))
+            (test-request-success client)))
+
         (sleep *test-process-time*)
         (ok (ask-to-shutdown-worker master (worker/name worker)))
         (stop-master master))
@@ -254,12 +286,14 @@
       (shutdown work-node)
 
       (let* ((client-port 55555)
+             (uri (format nil "tcp://localhost:~a" client-port))
+             (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
              (recipe1 (build-test-recipe1 queue-1 queue-2 5))
              (recipe2 (build-test-recipe2 queue-2 queue-3 10))
              (master (start-master 2 client-port))
              (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
         (bt:make-thread #'(lambda ()
-                            (start-worker worker (format nil "tcp://localhost:~a" client-port))
+                            (start-worker worker uri)
                             (run-worker worker)
                             (stop-worker worker)
                             (pass "worker-stopped")))
@@ -267,8 +301,17 @@
         (sleep .1)
         (add-recipe master recipe1)
         (add-recipe master recipe2)
-        (ok (ask-to-start-node master "TEST1"))
-        (ok (ask-to-start-node master "TEST2"))
+
+        (pzmq:with-context nil
+          (pzmq:with-socket client :dealer
+            (pzmq:setsockopt client :identity client-name)
+            (pzmq:connect client uri)
+
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
+            (test-request-success client)
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST2"))
+            (test-request-success client)))
+
         (sleep *test-process-time*)
         (ok (ask-to-shutdown-worker master (worker/name worker)))
         (stop-master master))
@@ -304,6 +347,8 @@
       (shutdown work-node)
 
       (let* ((client-port 55555)
+             (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
+             (uri (format nil "tcp://localhost:~a" client-port))
              (recipe1 (build-test-recipe1 queue-1 queue-2 5))
              (recipe2 (build-test-recipe2 queue-2 queue-3 10))
              (recipe3 (build-test-recipe3 queue-3 queue-4 4))
@@ -311,12 +356,12 @@
              (worker1 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
              (worker2 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
         (bt:make-thread #'(lambda ()
-                            (start-worker worker1 (format nil "tcp://localhost:~a" client-port))
+                            (start-worker worker1 uri)
                             (run-worker worker1)
                             (stop-worker worker1)
                             (pass "worker1-stopped")))
         (bt:make-thread #'(lambda ()
-                            (start-worker worker2 (format nil "tcp://localhost:~a" client-port))
+                            (start-worker worker2 uri)
                             (run-worker worker2)
                             (stop-worker worker2)
                             (pass "worker2-stopped")))
@@ -325,11 +370,23 @@
         (add-recipe master recipe1)
         (add-recipe master recipe2)
         (add-recipe master recipe3)
-        (ok (ask-to-start-node master "TEST3"))
-        (ok (ask-to-start-node master "TEST3"))
-        (ok (ask-to-start-node master "TEST2"))
-        (ok (ask-to-start-node master "TEST1"))
-        (ok (ask-to-start-node master "TEST2"))
+
+        (pzmq:with-context nil
+          (pzmq:with-socket client :dealer
+            (pzmq:setsockopt client :identity client-name)
+            (pzmq:connect client uri)
+
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST3"))
+            (test-request-success client)
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST3"))
+            (test-request-success client)
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST2"))
+            (test-request-success client)
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
+            (test-request-success client)
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST2"))
+            (test-request-success client)))
+
         (sleep *test-process-time*)
         (ok (ask-to-shutdown-worker master (worker/name worker1)))
         (ok (ask-to-shutdown-worker master (worker/name worker2)))
