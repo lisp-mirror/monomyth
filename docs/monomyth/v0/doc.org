@@ -103,6 +103,14 @@
    and respond to the MMOP messages the master receives (this is done via the ~req~/~router~
    ZeroMQ load balancing pattern, see http://zguide.zeromq.org/page:chapter3#toc18).
 
+** Control API Server
+    The control api is a REST server that communicates via MMOP to issue operating
+    commands to the master server.
+    Its purpose is too create an easy to use interface so that users don't have to
+    build a ZMQ client themselves.
+    Currently, the control api can start nodes, stop workers, and request recipe
+    information that includes how many nodes are running that recipe.
+
 * MMOP
   MMOP is a protocol designed to run on top of ZeroMQ used by master and worker servers.
   Each MMOP message is a multipart ZeroMQ Message requiring the collection of multiple frames.
