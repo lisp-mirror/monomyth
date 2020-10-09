@@ -39,8 +39,6 @@ and a table of node type symbols to node recipes"
       (context (pzmq:ctx-new)
        :read-only t
        :transactional nil)
-      (outbound-socket nil
-       :transactional nil)
       (running t)))
 
 (defun start-master (thread-count client-port)
@@ -76,7 +74,6 @@ and a table of node type symbols to node recipes"
        (pzmq:with-sockets (((threads (master-context master)) :router)
                            ((clients (master-context master)) :router))
          (pzmq:bind threads *internal-conn-name*)
-         (atomic (setf (master-outbound-socket master) clients))
          (pzmq:bind clients (format nil "tcp://*:~a" client-port))
 
          (pzmq:with-poll-items items (threads clients)
@@ -86,25 +83,25 @@ and a table of node type symbols to node recipes"
              (pzmq:poll items)
 
              (when (member :pollin (pzmq:revents items 0))
-              (route-outgoing-message master threads))
+              (route-outgoing-message clients threads))
 
              (when (member :pollin (pzmq:revents items 1))
                (route-incoming-message
-                master threads (nth (mod wrker-count thread-count) thread-names))
+                clients threads (nth (mod wrker-count thread-count) thread-names))
                (incf wrker-count))
 
              (iter:finally (end-threads threads thread-count))))))
    :name *router-thread-name*))
 
-(defun route-outgoing-message (master threads)
+(defun route-outgoing-message (clients threads)
   (let ((frames (handle-pull-msg threads "get-inbound-msg")))
     (v:debug '(:master.router.outgoing)
              "received message: (~{~a~^, ~})" frames)
-    (forward-frames-to-client (master-outbound-socket master) frames)
+    (forward-frames-to-client clients frames)
     (v:debug '(:master.router.outgoing) "forwarded message to client")))
 
-(defun route-incoming-message (master threads worker-id)
-  (let ((msg-frames (handle-pull-msg (master-outbound-socket master) "get-inbound-msg")))
+(defun route-incoming-message (clients threads worker-id)
+  (let ((msg-frames (handle-pull-msg clients "get-inbound-msg")))
     (v:debug '(:master.router.incoming)
              "received message: (~{~a~^, ~})" msg-frames)
     (forward-frames-to-worker threads worker-id msg-frames)
