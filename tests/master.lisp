@@ -164,13 +164,26 @@
             (test-resonses master client3-name c3-expected-results)))
 
         (testing "stop-worker"
-          (iter:iterate
-            (iter:for client in clients)
-            (ask-to-shutdown-worker master client))
+          (pzmq:with-context nil
+            (pzmq:with-socket client :dealer
+              (pzmq:setsockopt client :identity client-name)
+              (pzmq:connect client uri)
 
-          (ok (typep (mmop-w:pull-worker-message client1) 'mmop-w:shutdown-worker-v0))
-          (ok (typep (mmop-w:pull-worker-message client2) 'mmop-w:shutdown-worker-v0))
-          (ok (typep (mmop-w:pull-worker-message client3) 'mmop-w:shutdown-worker-v0)))))
+              (iter:iterate
+                (iter:for client-id in clients)
+                (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 client-id))
+                (test-shutdown-success client))
+
+              (ok (typep (mmop-w:pull-worker-message client1) 'mmop-w:shutdown-worker-v0))
+              (ok (typep (mmop-w:pull-worker-message client2) 'mmop-w:shutdown-worker-v0))
+              (ok (typep (mmop-w:pull-worker-message client3) 'mmop-w:shutdown-worker-v0))
+
+              (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 "fail-test"))
+              (adt:match mmop-c:received-mmop (mmop-c:pull-control-message client)
+                ((mmop-c:stop-worker-request-failure-v0 msg code)
+                 (ok (string= msg "could not shutdown unrecognized worker fail-test"))
+                 (ok (= code 400)))
+                (_ (fail "unexpected message type"))))))))
 
     (stop-master master)))
 
@@ -249,10 +262,13 @@
             (pzmq:setsockopt client :identity client-name)
             (pzmq:connect client uri)
             (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST"))
-            (test-request-success client)))
+            (test-request-success client)
 
-        (sleep *test-process-time*)
-        (ok (ask-to-shutdown-worker master (worker/name worker)))
+            (sleep *test-process-time*)
+
+            (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker)))
+            (test-shutdown-success client)))
+
         (stop-master master))
 
       (setf work-node
@@ -310,10 +326,13 @@
             (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
             (test-request-success client)
             (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST2"))
-            (test-request-success client)))
+            (test-request-success client)
 
-        (sleep *test-process-time*)
-        (ok (ask-to-shutdown-worker master (worker/name worker)))
+            (sleep *test-process-time*)
+
+            (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker)))
+            (test-shutdown-success client)))
+
         (stop-master master))
 
       (setf work-node
@@ -385,11 +404,15 @@
             (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
             (test-request-success client)
             (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST2"))
-            (test-request-success client)))
+            (test-request-success client)
 
-        (sleep *test-process-time*)
-        (ok (ask-to-shutdown-worker master (worker/name worker1)))
-        (ok (ask-to-shutdown-worker master (worker/name worker2)))
+            (sleep *test-process-time*)
+
+            (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker1)))
+            (test-shutdown-success client)
+            (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker2)))
+            (test-shutdown-success client)))
+
         (stop-master master))
 
       (setf work-node

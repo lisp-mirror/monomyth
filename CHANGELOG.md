@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Control REST API that allows users to manage the system.
 - Control REST API ping endpoint.
 - Control REST API start-node endpoint.
+- Control REST API stop-worker endpoint.
 - Control REST API recipe-info endpoint.
 
 ### Changed

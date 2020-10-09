@@ -74,6 +74,26 @@
           (_ (v:error :control-api.recipe-info "unexpected MMOP message")
              (respond nil :status 500))))))
 
+  (define-route server "/stop-worker/:worker-id" :post
+    (defview stop-worker (worker-id)
+      (pzmq:with-socket (master *zmq-context*) :dealer
+        (pzmq:setsockopt master :identity (build-api-name))
+        (pzmq:connect master master-uri)
+
+        (send-msg master *mmop-v0* (mmop-c:stop-worker-request-v0 worker-id))
+        (adt:match received-mmop (pull-control-message master)
+          ((stop-worker-request-success-v0)
+           (respond (to-json '(:|request_sent_to_worker| t))
+                    :type "application/json"
+                    :status 201))
+          ((stop-worker-request-failure-v0 msg code)
+           (respond (to-json `(:|request_sent_to_worker| :false
+                                :|error_message| ,msg))
+                    :type "application/json"
+                    :status code))
+          (_ (v:error :control-api.stop-worker "unexpected MMOP message")
+             (respond nil :status 500))))))
+
   (start server :server :woo :port port))
 
 (defun stop-server ()
