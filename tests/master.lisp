@@ -60,7 +60,8 @@
       (testing "start-node no workers"
         (send-msg client1 *mmop-v0* (mmop-c:start-node-request-v0 "test"))
         (adt:match mmop-c:received-mmop (mmop-c:pull-control-message client1)
-          ((mmop-c:start-node-request-failure-v0 msg)
+          ((mmop-c:start-node-request-failure-v0 msg code)
+           (ok (= code 503))
            (ok (string= msg "no active worker servers")))
           (_ (fail "unexpected message type"))))
 

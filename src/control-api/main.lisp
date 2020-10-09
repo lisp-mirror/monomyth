@@ -53,11 +53,11 @@
                     :type "application/json"
                     :status 201))
 
-          ((start-node-request-failure-v0 msg)
+          ((start-node-request-failure-v0 msg code)
            (respond (to-json `(:|request_sent_to_worker| :false
                                 :|error_message| ,msg))
                     :type "application/json"
-                    :status 400))
+                    :status code))
 
           (_ (v:error :control-api.ping "unexpected MMOP message")
              (respond nil :status 500))))))
