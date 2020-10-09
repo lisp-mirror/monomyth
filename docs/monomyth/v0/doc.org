@@ -194,10 +194,13 @@
 
     The start-node-request-failure indicates that the master server has received
     the request but was unable to act on it for some ~failure-reason~.
+    The master server also sends the expected ~status-code~ that the api should
+    return.
 
     Frames:
     1. ~START-NODE-REQUEST-FAILED~
     2. ~<failure-reason>~
+    3. ~<status-code>~
 
 **** Start Node [start-node]
 

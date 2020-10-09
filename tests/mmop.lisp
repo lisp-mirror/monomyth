@@ -187,9 +187,11 @@
           (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 req-type))
           (mmop-m:pull-master-message server)
           (send-msg server *mmop-v0*
-                    (mmop-m:start-node-request-failure-v0 client-name err-msg))
+                    (mmop-m:start-node-request-failure-v0 client-name err-msg 409))
           (adt:match mmop-c:received-mmop (mmop-c:pull-control-message client)
-            ((mmop-c:start-node-request-failure-v0 msg) (ok (string= msg err-msg)))
+            ((mmop-c:start-node-request-failure-v0 msg code)
+             (ok (= code 409))
+             (ok (string= msg err-msg)))
             (_ (fail "mmop message is of wrong type")))))))
 
   (testing "stop-worker-request"

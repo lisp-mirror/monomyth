@@ -60,7 +60,7 @@
       (setf (quri:uri-path uri) "/start-node/TEST")
       (handler-case (dex:post uri)
         (dex:http-request-failed (e)
-          (ok (= (dex:response-status e) 400))
+          (ok (= (dex:response-status e) 503))
           (let ((body (parse (dex:response-body e))))
             (ng (getf body :|request_sent_to_worker|))
             (ok (string= (getf body :|error_message|)

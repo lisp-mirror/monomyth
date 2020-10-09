@@ -340,10 +340,10 @@ to a plist with :running and :queued"
                  "could not send start node message (mmop version: ~a): ~a"
                  (mmop-error/version c) (mmop-error/message c))))))
 
-(defun confirm-start-node-failure (socket client-id message)
+(defun confirm-start-node-failure (socket client-id message code)
   "Sends a request failure message to the client with the supplied message."
   (handler-case
-      (send-msg socket *mmop-v0* (start-node-request-failure-v0 client-id message))
+      (send-msg socket *mmop-v0* (start-node-request-failure-v0 client-id message code))
 
     (mmop-error (c)
       (v:error :master.handler
@@ -359,13 +359,13 @@ returns t if it works, nil otherwise"
       ((ghash-table-empty? (master-workers master))
        (let ((msg "no active worker servers"))
          (v:error :master.handler.start-node msg)
-         (confirm-start-node-failure socket client-id msg)))
+         (confirm-start-node-failure socket client-id msg 503)))
 
       (recipe (start-node master socket client-id type-id recipe))
 
       (t (let ((msg (format nil "could not find recipe type ~a" type-id)))
            (v:error :master.handler.start-node msg)
-           (confirm-start-node-failure socket client-id msg))))))
+           (confirm-start-node-failure socket client-id msg 400))))))
 
 (defun ask-to-shutdown-worker (master socket client-id worker-id)
   "uses a master to tell a worker to shutdown via MMOP.

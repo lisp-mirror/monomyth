@@ -26,8 +26,8 @@
   (pong-v0 string)
   ;; client-id
   (start-node-request-success-v0 string)
-  ;; client-id error-reason
-  (start-node-request-failure-v0 string string)
+  ;; client-id error-reason status-code
+  (start-node-request-failure-v0 string string integer)
   ;; client-id json-response
   (recipe-info-response-v0 string string)
   ;; client-id recipe
@@ -67,7 +67,8 @@
 
 (defmethod create-frames ((message start-node-request-failure-v0))
   `(,(start-node-request-failure-v0%0 message) ,*mmop-v0* "START-NODE-REQUEST-FAILURE"
-    ,(start-node-request-failure-v0%1 message)))
+    ,(start-node-request-failure-v0%1 message)
+    ,(write-to-string (start-node-request-failure-v0%2 message))))
 
 (defmethod create-frames ((message stop-worker-request-success-v0))
   `(,(stop-worker-request-success-v0%0 message) ,*mmop-v0* "STOP-WORKER-REQUEST-SUCCESS"))

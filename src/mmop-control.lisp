@@ -29,8 +29,8 @@
   ;; json-response
   (recipe-info-response-v0 string)
   start-node-request-success-v0
-  ;; error-message
-  (start-node-request-failure-v0 string)
+  ;; error-message status-code
+  (start-node-request-failure-v0 string integer)
   stop-worker-request-success-v0
   ;; error-message status-code
   (stop-worker-request-failure-v0 string integer))
@@ -64,8 +64,8 @@ into the correct adt"
                ((list "PONG") pong-v0)
                ((list "RECIPE-INF0-RESPONSE" json) (recipe-info-response-v0 json))
                ((list "START-NODE-REQUEST-SUCCESS") start-node-request-success-v0)
-               ((list "START-NODE-REQUEST-FAILURE" error-message)
-                (start-node-request-failure-v0 error-message))
+               ((list "START-NODE-REQUEST-FAILURE" error-message status-code)
+                (start-node-request-failure-v0 error-message (parse-integer status-code)))
                ((list "STOP-WORKER-REQUEST-SUCCESS") stop-worker-request-success-v0)
                ((list "STOP-WORKER-REQUEST-FAILURE" error-message status-code)
                 (stop-worker-request-failure-v0 error-message (parse-integer status-code))))))
