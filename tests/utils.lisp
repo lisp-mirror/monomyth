@@ -20,7 +20,8 @@
    build-test-recipe1
    build-test-recipe2
    build-test-recipe3
-   test-request-success))
+   test-request-success
+   test-shutdown-success))
 (in-package :monomyth/tests/utils)
 
 (defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
@@ -126,4 +127,9 @@
 (defun test-request-success (socket)
   (adt:match mmop-c:received-mmop (mmop-c:pull-control-message socket)
     ((mmop-c:start-node-request-success-v0) (pass "request succeeded message"))
+    (_ (fail "unexpected message type"))))
+
+(defun test-shutdown-success (socket)
+  (adt:match mmop-c:received-mmop (mmop-c:pull-control-message socket)
+    ((mmop-c:stop-worker-request-success-v0) (pass "stop worker succeeded message"))
     (_ (fail "unexpected message type"))))

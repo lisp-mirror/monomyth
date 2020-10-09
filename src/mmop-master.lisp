@@ -7,10 +7,13 @@
            ping-v0
            recipe-info-v0
            start-node-request-v0
+           stop-worker-request-v0
            pong-v0
            recipe-info-response-v0
            start-node-request-success-v0
            start-node-request-failure-v0
+           stop-worker-request-success-v0
+           stop-worker-request-failure-v0
            worker-ready-v0
            start-node-v0
            start-node-success-v0
@@ -30,6 +33,10 @@
   ;; client-id recipe
   (start-node-v0 string node-recipe)
   ;; client-id
+  (stop-worker-request-success-v0 string)
+  ;; client-id error-message status-code
+  (stop-worker-request-failure-v0 string string integer)
+  ;; client-id
   (shutdown-worker-v0 string))
 
 (adt:defdata received-mmop
@@ -39,6 +46,8 @@
   (recipe-info-v0 string)
   ;; client-id recipe-type
   (start-node-request-v0 string string)
+  ;; client-id worker-id
+  (stop-worker-request-v0 string string)
   ;; client-id
   (worker-ready-v0 string)
   ;; client-id type
@@ -59,6 +68,14 @@
 (defmethod create-frames ((message start-node-request-failure-v0))
   `(,(start-node-request-failure-v0%0 message) ,*mmop-v0* "START-NODE-REQUEST-FAILURE"
     ,(start-node-request-failure-v0%1 message)))
+
+(defmethod create-frames ((message stop-worker-request-success-v0))
+  `(,(stop-worker-request-success-v0%0 message) ,*mmop-v0* "STOP-WORKER-REQUEST-SUCCESS"))
+
+(defmethod create-frames ((message stop-worker-request-failure-v0))
+  `(,(stop-worker-request-failure-v0%0 message) ,*mmop-v0* "STOP-WORKER-REQUEST-FAILURE"
+    ,(stop-worker-request-failure-v0%1 message)
+    ,(write-to-string (stop-worker-request-failure-v0%2 message))))
 
 (defmethod create-frames ((message start-node-v0))
   (let ((recipe (start-node-v0%1 message)))
@@ -89,6 +106,8 @@ translate it into an equivalent struct"
                ((list "RECIPE-INFO") (recipe-info-v0 id))
                ((list "START-NODE-REQUEST" recipe-type)
                 (start-node-request-v0 id recipe-type))
+               ((list "STOP-WORKER-REQUEST" worker-id)
+                (stop-worker-request-v0 id worker-id))
                ((list "READY") (worker-ready-v0 id))
                ((list "START-NODE-SUCCESS" node-type)
                 (start-node-success-v0 id node-type))

@@ -57,7 +57,7 @@
     (add-recipe master recipe)
 
     (testing "no workers"
-      (setf (quri:uri-path uri) (format nil "/start-node/TEST"))
+      (setf (quri:uri-path uri) "/start-node/TEST")
       (handler-case (dex:post uri)
         (dex:http-request-failed (e)
           (ok (= (dex:response-status e) 400))
@@ -81,7 +81,7 @@
         (ok (getf body :|request_sent_to_worker|))))
 
     (testing "bad recipe"
-      (setf (quri:uri-path uri) (format nil "/start-node/BAD-TEST"))
+      (setf (quri:uri-path uri) "/start-node/BAD-TEST")
       (handler-case (dex:post uri)
         (dex:http-request-failed (e)
           (ok (= (dex:response-status e) 400))
@@ -89,6 +89,53 @@
             (ng (getf body :|request_sent_to_worker|))
             (ok (string= (getf body :|error_message|)
                          "could not find recipe type BAD-TEST"))))))
+
+    (stop-server)
+    (stop-master master)
+    (pass "server shutdown")))
+
+(deftest stop-worker-endpoint
+  (let ((master (start-master 2 *master-port*))
+        (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
+        (uri (quri:uri *api-uri*))
+        (recipe (build-test-recipe queue-1 queue-2)))
+    (start-server *master-uri* *api-port*)
+    (add-recipe master recipe)
+
+    (testing "no workers"
+      (setf (quri:uri-path uri) "/stop-worker/test")
+      (handler-case (dex:post uri)
+        (dex:http-request-failed (e)
+          (ok (= (dex:response-status e) 400))
+          (let ((body (parse (dex:response-body e))))
+            (ng (getf body :|request_sent_to_worker|))
+            (ok (string= (getf body :|error_message|)
+                         "could not shutdown unrecognized worker test"))))))
+
+    (bt:make-thread #'(lambda ()
+                        (start-worker worker (format nil "tcp://localhost:~a" *master-port*))
+                        (run-worker worker)
+                        (stop-worker worker)
+                        (pass "worker-stopped")))
+
+    (sleep .1)
+
+    (testing "good worker"
+      (setf (quri:uri-path uri) (format nil "/stop-worker/~a" (worker/name worker)))
+      (let* ((resp (multiple-value-list (dex:post uri)))
+             (body (parse (car resp))))
+        (ok (= (nth 1 resp) 201))
+        (ok (getf body :|request_sent_to_worker|))))
+
+    (testing "bad worker"
+      (setf (quri:uri-path uri) "/stop-worker/test")
+      (handler-case (dex:post uri)
+        (dex:http-request-failed (e)
+          (ok (= (dex:response-status e) 400))
+          (let ((body (parse (dex:response-body e))))
+            (ng (getf body :|request_sent_to_worker|))
+            (ok (string= (getf body :|error_message|)
+                         "could not shutdown unrecognized worker test"))))))
 
     (stop-server)
     (stop-master master)
@@ -158,7 +205,14 @@
         (ok (= (nth 1 resp) 200))
         (confirm-recipe-counts (parse (car resp)))))
 
-    (ask-to-shutdown-worker master (worker/name worker))
+      (pzmq:with-context nil
+        (pzmq:with-socket client :dealer
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client (format nil "tcp://localhost:~a" *master-port*))
+
+          (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker)))
+          (test-shutdown-success client)))
+
     (stop-server)
     (stop-master master)
     (pass "server shutdown")))

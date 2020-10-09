@@ -237,6 +237,36 @@
      3. ~<reason-category>~
      4. ~<reason-string>~
 
+**** Stop Worker Request [stop-worker-request]
+
+    The stop-worker-request message is sent by the control api to request that the
+    supplied worker needs to be shut down.
+
+    Frames:
+    1. ~STOP-WORKER-REQUEST~
+    2. ~<worker-id>~
+
+**** Stop Worker Request Succeeded [stop-worker-request-success]
+
+    The stop-worker-request-success message indicates to the control api that the
+    master server has received the request and successfully sent a request to the
+    worker server.
+
+    Frames:
+    1. ~STOP-WORKER-REQUEST-SUCCESS~
+
+**** Stop Worker Request Failed [stop-worker-request-failure]
+
+    The stop-worker-request-failure message indicates to the control api that the
+    master server has received the request but was unable to send out the request.
+    The message contains the ~error-message~ and which ~status-code~ the control api
+    should report.
+
+    Frames:
+    1. ~STOP-WORKER-REQUEST-FAILURE~
+    2. ~<error-message>~
+    3. ~<status-code>~
+
 **** Stop Worker [stop-worker]
 
      Instructs a worker to shutdown all threads and connections.

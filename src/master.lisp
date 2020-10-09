@@ -162,22 +162,33 @@ and a table of node type symbols to node recipes"
 (defun handle-message (master socket mmop-msg)
   "handles a specific message for the master, return t if the master should continue"
   (let ((res (adt:match received-mmop mmop-msg
-               ((ping-v0 client-id) (send-pong-v0 socket client-id))
+               ((ping-v0 client-id)
+                (send-pong-v0 socket client-id)
+                t)
 
                ((recipe-info-v0 client-id)
-                (send-recipe-info-response-v0 master socket client-id))
+                (send-recipe-info-response-v0 master socket client-id)
+                t)
 
                ((start-node-request-v0 client-id recipe-type)
-                (ask-to-start-node master socket client-id recipe-type))
+                (ask-to-start-node master socket client-id recipe-type)
+                t)
+
+               ((stop-worker-request-v0 client-id worker-id)
+                (ask-to-shutdown-worker master socket client-id worker-id)
+                t)
 
                ((worker-ready-v0 client-id)
-                (add-worker master client-id))
+                (add-worker master client-id)
+                t)
 
                ((start-node-success-v0 id type-id)
-                (start-successful master id type-id))
+                (start-successful master id type-id)
+                t)
 
                ((start-node-failure-v0 id type-id cat msg)
-                (start-unsuccessful master id type-id cat msg)))))
+                (start-unsuccessful master id type-id cat msg)
+                t))))
 
     (unless res
       (v:error '(:master.handler.event-loop :mmop)
@@ -187,8 +198,7 @@ and a table of node type symbols to node recipes"
 (defun send-pong-v0 (socket client-id)
   (v:debug '(:master.handler.ping) "got message (~a)" client-id)
   (send-msg socket *mmop-v0* (pong-v0 client-id))
-  (v:debug '(:master.handler.ping) "sent pong")
-  t)
+  (v:debug '(:master.handler.ping) "sent pong"))
 
 (defun start-unsuccessful (master client-id type-id cat msg)
   "removes the record of the outstanding request"
@@ -274,8 +284,7 @@ to a plist with :running and :queued"
         #'(lambda (acc key val)
             (append `((:|type| ,key :|counts| ,val)) acc))
         info-map
-        :initial-value '())))))
-  t)
+        :initial-value '()))))))
 
 (transaction
     (defun total-posible-nodes (worker type-id)
@@ -323,15 +332,13 @@ to a plist with :running and :queued"
                    (get-ghash (master-workers master) worker-id))
                   type-id)
                  (1+ val))))
-        (send-msg socket *mmop-v0* (start-node-request-success-v0 client-id))
-        t)
+        (send-msg socket *mmop-v0* (start-node-request-success-v0 client-id)))
 
     (mmop-error (c)
       (progn
         (v:error :master.handler
                  "could not send start node message (mmop version: ~a): ~a"
-                 (mmop-error/version c) (mmop-error/message c))
-        nil))))
+                 (mmop-error/version c) (mmop-error/message c))))))
 
 (defun confirm-start-node-failure (socket client-id message)
   "Sends a request failure message to the client with the supplied message."
@@ -352,31 +359,38 @@ returns t if it works, nil otherwise"
       ((ghash-table-empty? (master-workers master))
        (let ((msg "no active worker servers"))
          (v:error :master.handler.start-node msg)
-         (confirm-start-node-failure socket client-id msg)
-         nil))
+         (confirm-start-node-failure socket client-id msg)))
 
       (recipe (start-node master socket client-id type-id recipe))
 
       (t (let ((msg (format nil "could not find recipe type ~a" type-id)))
            (v:error :master.handler.start-node msg)
-           (confirm-start-node-failure socket client-id msg)
-           nil)))))
+           (confirm-start-node-failure socket client-id msg))))))
 
-(defun ask-to-shutdown-worker (master worker-id)
+(defun ask-to-shutdown-worker (master socket client-id worker-id)
   "uses a master to tell a worker to shutdown via MMOP.
 No state in the master is currently changes, returns t if the call seems to have
 been sent, nil otherwise"
+  (v:info :master "requesting to stop worker ~a" worker-id)
   (if (get-ghash (master-workers master) worker-id)
       (handler-case
-          (send-msg (master-outbound-socket master) *mmop-v0*
-                    (shutdown-worker-v0 worker-id))
+          (progn
+            (send-msg socket *mmop-v0* (shutdown-worker-v0 worker-id))
+            (send-msg socket *mmop-v0* (stop-worker-request-success-v0 client-id)))
+
         (mmop-error (c)
           (progn
-            (v:error :master.handler
+            (v:error :master.handler.shutdown-worker
                      "could not send stop worker message (mmop version: ~a): ~a"
-                     (mmop-error/version c) (mmop-error/message c))
-            nil))
+                     (mmop-error/version c) (mmop-error/message c))))
         (:no-error (res) (declare (ignore res)) t))
       (progn
-        (v:error :master "could not shutdown unrecognized worker ~a" worker-id)
-        nil)))
+        (let ((msg (format nil "could not shutdown unrecognized worker ~a" worker-id)))
+          (v:error :master.handler.shutdown-worker msg)
+          (handler-case
+              (send-msg socket *mmop-v0* (stop-worker-request-failure-v0 client-id msg 400))
+
+            (mmop-error (c)
+              (v:error :master.handler.shutdown-worker
+                       "could not send stop worker message (mmop version: ~a): ~a"
+                       (mmop-error/version c) (mmop-error/message c))))))))
