@@ -60,28 +60,25 @@ it should be okay start a node"))
 
 (defun handle-message (worker mmop-msg)
   "handles a specific message for the worker, return t if the worker should continue"
-  (let ((res (adt:match mmop-w:received-mmop mmop-msg
-               ((shutdown-worker-v0) (return-from handle-message nil))
+  (adt:match mmop-w:received-mmop mmop-msg
+    ((shutdown-worker-v0) nil)
 
-               ((start-node-v0 type recipe)
-                (handler-case (build-node worker recipe)
-                  (sb-pcl::no-applicable-method-error (e)
-                    (declare (ignore e))
-                    (send-msg (worker/socket worker) (worker/mmop-version worker)
-                              (mmop-w:start-node-failure-v0
-                               type "recipe build" "worker cannot handle recipe type"))
-                    t)
-                  (:no-error (res)
-                    (startup res)
-                    (let ((name (node/node-name res)))
-                      (setf (gethash name (worker/nodes worker)) res)
-                      (send-msg (worker/socket worker) (worker/mmop-version worker)
-                                (mmop-w:start-node-success-v0 type)))
-                    t))))))
-    (unless res
-      (v:error '(:worker.event-loop :mmop)
-               "did not recognize [~a] in worker event loop" mmop-msg))
-    t))
+    ((start-node-v0 type recipe)
+     (handler-case (build-node worker recipe)
+       (sb-pcl::no-applicable-method-error (e)
+         (declare (ignore e))
+         (send-msg (worker/socket worker) (worker/mmop-version worker)
+                   (mmop-w:start-node-failure-v0
+                    type "recipe build" "worker cannot handle recipe type"))
+         t)
+
+       (:no-error (res)
+         (startup res)
+         (let ((name (node/node-name res)))
+           (setf (gethash name (worker/nodes worker)) res)
+           (send-msg (worker/socket worker) (worker/mmop-version worker)
+                     (mmop-w:start-node-success-v0 type)))
+         t)))))
 
 (defmethod stop-worker ((worker worker))
   (v:info :worker "stopping worker ~a" (worker/name worker))
