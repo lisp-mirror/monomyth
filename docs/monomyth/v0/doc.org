@@ -154,20 +154,30 @@
 
 **** Recipe Info [recipe-info]
 
-    The recipe-info is sent by the control server to the master server.
-    It results in a recipe-info-response.
+    The recipe-info message is sent by the control server to the master server
+    as a request for an information about how many node types are active or
+    queued to be active.
+    It results in a json-info-response.
 
     Frames:
     1. ~RECIPE-INFO~
 
-**** Recipe Info Response [recipe-info-response]
+**** Worker Info [worker-info]
 
-    The recipe-info-response is sent by the master server to the control server
-    in response to the recipe-info message.
-    It reports the current recipes in use and how many are used in active nodes.
+    The worker-info message is sent by the control server to the master server
+    to request node information per master server.
+    It results in a json-info-response.
 
     Frames:
-    1. ~RECIPE-INFO-RESPONSE~
+    1. ~WORKER-INFO~
+
+**** JSON Info Response [json-info-response]
+
+    The json-info-response message is sent by the master server to the control
+    server in response to an info request.
+
+    Frames:
+    1. ~JSON-INFO-RESPONSE~
     2. ~<response-json>~
 
 **** Worker Ready [worker-ready]

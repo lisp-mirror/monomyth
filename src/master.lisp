@@ -45,13 +45,12 @@ and a table of node type symbols to node recipes"
   "starts up all worker threads and the router loop for load balancing"
   (v:info :master "starting master server with ~a threads listening for workers at port ~a"
           thread-count client-port)
-  (let ((master (build-master)))
-    (let ((thread-names
-            (iter:iterate
-              (iter:repeat thread-count)
-              (iter:collect (start-handler-thread master)))))
-      (start-router-loop master client-port thread-count thread-names))
-
+  (let* ((master (build-master))
+         (thread-names
+           (iter:iterate
+             (iter:repeat thread-count)
+             (iter:collect (start-handler-thread master)))))
+    (start-router-loop master client-port thread-count thread-names)
     master))
 
 (defun stop-master (master)
@@ -157,14 +156,18 @@ and a table of node type symbols to node recipes"
     idenifier))
 
 (defun handle-message (master socket mmop-msg)
-  "handles a specific message for the master, return t if the master should continue"
+  "handles a specific message for the master"
   (let ((res (adt:match received-mmop mmop-msg
                ((ping-v0 client-id)
                 (send-pong-v0 socket client-id)
                 t)
 
                ((recipe-info-v0 client-id)
-                (send-recipe-info-response-v0 master socket client-id)
+                (send-recipe-info master socket client-id)
+                t)
+
+               ((worker-info-v0 client-id)
+                (send-worker-info master socket client-id)
                 t)
 
                ((start-node-request-v0 client-id recipe-type)
@@ -270,11 +273,11 @@ to a plist with :running and :queued"
        (mapcar #'pull-worker-type-info (ghash-values (master-workers master)))
        :initial-value (fset:empty-map))))
 
-(defun send-recipe-info-response-v0 (master socket client-id)
+(defun send-recipe-info (master socket client-id)
   (let ((info-map (atomic (pull-master-type-info master))))
     (send-msg
      socket *mmop-v0*
-     (recipe-info-response-v0
+     (json-info-response-v0
       client-id
       (to-json
        (fset:reduce
@@ -379,11 +382,10 @@ been sent, nil otherwise"
           (progn
             (v:error :master.handler.shutdown-worker
                      "could not send stop worker message (mmop version: ~a): ~a"
-                     (mmop-error/version c) (mmop-error/message c))))
-        (:no-error (res) (declare (ignore res)) t))
+                     (mmop-error/version c) (mmop-error/message c)))))
       (progn
         (let ((msg (format nil "could not shutdown unrecognized worker ~a" worker-id)))
-          (v:error :master.handler.shutdown-worker msg)
+          (v:warn :master.handler.shutdown-worker msg)
           (handler-case
               (send-msg socket *mmop-v0* (stop-worker-request-failure-v0 client-id msg 400))
 
@@ -391,3 +393,27 @@ been sent, nil otherwise"
               (v:error :master.handler.shutdown-worker
                        "could not send stop worker message (mmop version: ~a): ~a"
                        (mmop-error/version c) (mmop-error/message c))))))))
+
+(transaction
+    (defun get-worker-type-info (worker)
+      "translates a worker type count map object into an equivalent list of plists"
+      (mapcar
+       #'(lambda (type-pair)
+           `(:|recipe_name| ,(car type-pair) :|node_count| ,(cdr type-pair)))
+       (ghash-pairs
+        (worker-info-type-counts worker)))))
+
+(transaction
+    (defun get-all-worker-type-info (master)
+      "translates all workers into plists with node information"
+      (mapcar
+       #'(lambda (worker-pair)
+           `(:|worker_id| ,(car worker-pair)
+             :|nodes| ,(get-worker-type-info (cdr worker-pair))))
+       (ghash-pairs (master-workers master)))))
+
+(defun send-worker-info (master socket client-id)
+  "responds to a worker-info message by pulling the info and turning it into json"
+  (send-msg socket *mmop-v0*
+            (json-info-response-v0
+             client-id (to-json (get-all-worker-type-info master)))))

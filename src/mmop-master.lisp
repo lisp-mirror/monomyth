@@ -6,10 +6,11 @@
            received-mmop
            ping-v0
            recipe-info-v0
+           worker-info-v0
            start-node-request-v0
            stop-worker-request-v0
            pong-v0
-           recipe-info-response-v0
+           json-info-response-v0
            start-node-request-success-v0
            start-node-request-failure-v0
            stop-worker-request-success-v0
@@ -29,7 +30,7 @@
   ;; client-id error-reason status-code
   (start-node-request-failure-v0 string string integer)
   ;; client-id json-response
-  (recipe-info-response-v0 string string)
+  (json-info-response-v0 string string)
   ;; client-id recipe
   (start-node-v0 string node-recipe)
   ;; client-id
@@ -44,6 +45,8 @@
   (ping-v0 string)
   ;; client-id
   (recipe-info-v0 string)
+  ;; client-id
+  (worker-info-v0 string)
   ;; client-id recipe-type
   (start-node-request-v0 string string)
   ;; client-id worker-id
@@ -58,9 +61,9 @@
 (defmethod create-frames ((message pong-v0))
   `(,(pong-v0%0 message) ,*mmop-v0* "PONG"))
 
-(defmethod create-frames ((message recipe-info-response-v0))
-  `(,(recipe-info-response-v0%0 message) ,*mmop-v0* "RECIPE-INF0-RESPONSE"
-    ,(recipe-info-response-v0%1 message)))
+(defmethod create-frames ((message json-info-response-v0))
+  `(,(json-info-response-v0%0 message) ,*mmop-v0* "JSON-INF0-RESPONSE"
+    ,(json-info-response-v0%1 message)))
 
 (defmethod create-frames ((message start-node-request-success-v0))
   `(,(start-node-request-success-v0%0 message) ,*mmop-v0* "START-NODE-REQUEST-SUCCESS"))
@@ -105,6 +108,7 @@ translate it into an equivalent struct"
   (let ((res (trivia:match args
                ((list "PING") (ping-v0 id))
                ((list "RECIPE-INFO") (recipe-info-v0 id))
+               ((list "WORKER-INFO") (worker-info-v0 id))
                ((list "START-NODE-REQUEST" recipe-type)
                 (start-node-request-v0 id recipe-type))
                ((list "STOP-WORKER-REQUEST" worker-id)
