@@ -157,43 +157,30 @@ and a table of node type symbols to node recipes"
 
 (defun handle-message (master socket mmop-msg)
   "handles a specific message for the master"
-  (let ((res (adt:match received-mmop mmop-msg
-               ((ping-v0 client-id)
-                (send-pong-v0 socket client-id)
-                t)
+  (adt:match received-mmop mmop-msg
+    ((ping-v0 client-id)
+     (send-pong-v0 socket client-id))
 
-               ((recipe-info-v0 client-id)
-                (send-recipe-info master socket client-id)
-                t)
+    ((recipe-info-v0 client-id)
+     (send-recipe-info master socket client-id))
 
-               ((worker-info-v0 client-id)
-                (send-worker-info master socket client-id)
-                t)
+    ((worker-info-v0 client-id)
+     (send-worker-info master socket client-id))
 
-               ((start-node-request-v0 client-id recipe-type)
-                (ask-to-start-node master socket client-id recipe-type)
-                t)
+    ((start-node-request-v0 client-id recipe-type)
+     (ask-to-start-node master socket client-id recipe-type))
 
-               ((stop-worker-request-v0 client-id worker-id)
-                (ask-to-shutdown-worker master socket client-id worker-id)
-                t)
+    ((stop-worker-request-v0 client-id worker-id)
+     (ask-to-shutdown-worker master socket client-id worker-id))
 
-               ((worker-ready-v0 client-id)
-                (add-worker master client-id)
-                t)
+    ((worker-ready-v0 client-id)
+     (add-worker master client-id))
 
-               ((start-node-success-v0 id type-id)
-                (start-successful master id type-id)
-                t)
+    ((start-node-success-v0 id type-id)
+     (start-successful master id type-id))
 
-               ((start-node-failure-v0 id type-id cat msg)
-                (start-unsuccessful master id type-id cat msg)
-                t))))
-
-    (unless res
-      (v:error '(:master.handler.event-loop :mmop)
-               "did not recognize [~a] in worker event loop" mmop-msg))
-    t))
+    ((start-node-failure-v0 id type-id cat msg)
+     (start-unsuccessful master id type-id cat msg))))
 
 (defun send-pong-v0 (socket client-id)
   (v:debug '(:master.handler.ping) "got message (~a)" client-id)
