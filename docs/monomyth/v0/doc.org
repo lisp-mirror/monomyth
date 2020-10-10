@@ -194,7 +194,7 @@
     The start-node-request message is sent from the control api to the master
     server and indicates that the master should tell a worker to start up a node
     of the supplied ~recipe-type~.
-    This is an asynchronous operation and should result in a 202.
+    This is an asynchronous operation and if successful should result in a 201.
 
     Frames:
     1. ~START-NODE-REQUEST~
