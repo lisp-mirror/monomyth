@@ -117,7 +117,7 @@
             ((mmop-m:recipe-info-v0 client-id) (ok (string= client-id client-name)))
             (_ (fail "mmop message is of wrong type")))))))
 
-  (testing "recipe-info-response"
+  (testing "json-info-response/recipe"
     (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
           (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
           (json-payload "{\"tests\":2}"))
@@ -131,9 +131,43 @@
           (send-msg client *mmop-v0* mmop-c:recipe-info-v0)
           (mmop-m:pull-master-message server)
           (send-msg server *mmop-v0*
-                    (mmop-m:recipe-info-response-v0 client-name json-payload))
+                    (mmop-m:json-info-response-v0 client-name json-payload))
           (adt:match mmop-c:received-mmop (mmop-c:pull-control-message client)
-            ((mmop-c:recipe-info-response-v0 payload) (ok (string= payload json-payload)))
+            ((mmop-c:json-info-response-v0 payload) (ok (string= payload json-payload)))
+            (_ (fail "mmop message is of wrong type")))))))
+
+  (testing "worker-info"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid))))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (client :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
+
+          (send-msg client *mmop-v0* mmop-c:worker-info-v0)
+          (adt:match mmop-m:received-mmop (mmop-m:pull-master-message server)
+            ((mmop-m:worker-info-v0 client-id) (ok (string= client-id client-name)))
+            (_ (fail "mmop message is of wrong type")))))))
+
+  (testing "json-info-response/recipe"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
+          (json-payload "{\"tests\":2}"))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (client :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
+
+          (send-msg client *mmop-v0* mmop-c:worker-info-v0)
+          (mmop-m:pull-master-message server)
+          (send-msg server *mmop-v0*
+                    (mmop-m:json-info-response-v0 client-name json-payload))
+          (adt:match mmop-c:received-mmop (mmop-c:pull-control-message client)
+            ((mmop-c:json-info-response-v0 payload) (ok (string= payload json-payload)))
             (_ (fail "mmop message is of wrong type")))))))
 
   (testing "start-node-request"

@@ -1,7 +1,7 @@
 (defpackage monomyth/tests/control-api
   (:use :cl :rove :monomyth/control-api/main :bordeaux-threads :monomyth/mmop
    :monomyth/master :jonathan :cl-rabbit :monomyth/tests/utils :rutils.misc
-   :monomyth/rmq-node :monomyth/rmq-worker :monomyth/worker))
+        :monomyth/rmq-node :monomyth/rmq-worker :monomyth/worker))
 (in-package :monomyth/tests/control-api)
 
 (v:output-here *terminal-io*)
@@ -216,3 +216,104 @@
     (stop-server)
     (stop-master master)
     (pass "server shutdown")))
+
+(deftest worker-info-endpoint
+  (let* ((master (start-master 2 *master-port*))
+         (recipe1 (build-test-recipe1 queue-1 queue-2 5))
+         (recipe2 (build-test-recipe2 queue-2 queue-3 10))
+         (recipe3 (build-test-recipe3 queue-3 queue-4 4))
+         (worker1 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
+         (worker2 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
+         (worker3 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
+         (worker-ids `(,(worker/name worker1) ,(worker/name worker2) ,(worker/name worker3)))
+         (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
+         (uri (quri:uri *api-uri*)))
+    (start-server *master-uri* *api-port*)
+    (add-recipe master recipe1)
+    (add-recipe master recipe2)
+    (add-recipe master recipe3)
+    (setf (quri:uri-path uri) "/worker-info")
+
+    (testing "no workers running"
+             (let ((resp (multiple-value-list (dex:get uri))))
+               (ok (= (nth 1 resp) 200))
+               (ok (string= (car resp) (to-json '())))))
+
+    (bt:make-thread #'(lambda ()
+                        (start-worker worker1 (format nil "tcp://localhost:~a" *master-port*))
+                        (run-worker worker1)
+                        (stop-worker worker1)
+                        (pass "worker-stopped")))
+    (bt:make-thread #'(lambda ()
+                        (start-worker worker2 (format nil "tcp://localhost:~a" *master-port*))
+                        (run-worker worker2)
+                        (stop-worker worker2)
+                        (pass "worker-stopped")))
+    (bt:make-thread #'(lambda ()
+                        (start-worker worker3 (format nil "tcp://localhost:~a" *master-port*))
+                        (run-worker worker3)
+                        (stop-worker worker3)
+                        (pass "worker-stopped")))
+
+    (sleep .1)
+
+    (testing "workers running, no recipes"
+             (let* ((resp (multiple-value-list (dex:get uri)))
+                    (body (parse (car resp))))
+               (ok (= (nth 1 resp) 200))
+               (iter:iterate
+                (iter:for worker-info in body)
+                (ok (member (getf worker-info :|worker_id|) worker-ids :test #'string=))
+                (ok (equal (getf worker-info :|nodes|) '())))))
+
+    (pzmq:with-context nil
+      (pzmq:with-socket client :dealer
+        (pzmq:setsockopt client :identity client-name)
+        (pzmq:connect client (format nil "tcp://localhost:~a" *master-port*))
+
+        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST3"))
+        (test-request-success client)
+        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST3"))
+        (test-request-success client)
+        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST2"))
+        (test-request-success client)
+        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST3"))
+        (test-request-success client)
+        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
+        (test-request-success client)
+        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST3"))
+        (test-request-success client)
+        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST2"))
+        (test-request-success client)))
+
+    (sleep .1)
+
+    (let* ((resp (multiple-value-list (dex:get uri)))
+           (body (parse (car resp)))
+           (counts (reduce
+                    #'(lambda (acc val)
+                        (fset:map-union
+                         acc (node-count-plist-to-map (getf val :|nodes|)) #'add-node-count))
+                    body :initial-value (fset:empty-map))))
+      (ok (= (nth 1 resp) 200))
+      (ok (= (fset:lookup counts "TEST1") 1))
+      (ok (= (fset:lookup counts "TEST2") 2))
+      (ok (= (fset:lookup counts "TEST3") 4)))
+
+    (stop-server)
+    (stop-master master)
+    (pass "server shutdown")))
+
+(defun add-node-count (x y)
+  (cond
+    ((not x) y)
+    ((not y) x)
+    (t (+ x y))))
+
+(defun node-count-plist-to-map (plist)
+  "translates the node plists into an fset map"
+  (reduce
+   #'(lambda (acc val)
+       (fset:with acc (getf val :|recipe_name|) (getf val :|node_count|)))
+   plist
+   :initial-value (fset:empty-map)))

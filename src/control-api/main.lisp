@@ -70,8 +70,20 @@
 
         (send-msg master *mmop-v0* mmop-c:recipe-info-v0)
         (adt:match received-mmop (pull-control-message master)
-          ((recipe-info-response-v0 json) (respond json))
+          ((json-info-response-v0 json) (respond json :type "application/json"))
           (_ (v:error :control-api.recipe-info "unexpected MMOP message")
+             (respond nil :status 500))))))
+
+  (define-route server "/worker-info" :get
+    (defview worker-info ()
+      (pzmq:with-socket (master *zmq-context*) :dealer
+        (pzmq:setsockopt master :identity (build-api-name))
+        (pzmq:connect master master-uri)
+
+        (send-msg master *mmop-v0* mmop-c:worker-info-v0)
+        (adt:match received-mmop (pull-control-message master)
+          ((json-info-response-v0 json) (respond json :type "application/json"))
+          (_ (v:error :control-api.worker-info "unexpected MMOP message")
              (respond nil :status 500))))))
 
   (define-route server "/stop-worker/:worker-id" :post

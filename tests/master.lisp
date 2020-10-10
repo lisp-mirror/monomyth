@@ -5,7 +5,7 @@
   (:shadow :closer-mop))
 (in-package :monomyth/tests/master)
 
-(defparameter *test-process-time* 3)
+(defparameter *test-process-time* 5)
 (defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
 (defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
 (defparameter queue-1 (format nil "process-test-~a-1" (get-universal-time)))
