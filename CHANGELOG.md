@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through the router), but the load balancing is round-robin.
 - Changed to using qlot to manage dependencies.
 
+### Removed
+- Removed communication tests (processing tests should include verifying that communication works).
+
 ## [0.1.0] - 2020-09-13
 ### Added
 - Basic extendable node architecture that builds on a four step system, pull items,
