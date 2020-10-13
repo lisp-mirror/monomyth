@@ -2,61 +2,101 @@
   (:nicknames :mmop-m)
   (:use :cl :rutils.bind :monomyth/mmop :monomyth/node-recipe)
   (:export pull-master-message
+           sent-mmop
+           received-mmop
+           ping-v0
+           recipe-info-v0
+           worker-info-v0
+           start-node-request-v0
+           stop-worker-request-v0
+           pong-v0
+           json-info-response-v0
+           start-node-request-success-v0
+           start-node-request-failure-v0
+           stop-worker-request-success-v0
+           stop-worker-request-failure-v0
            worker-ready-v0
-           worker-ready-v0-client-id
-           make-start-node-v0
+           start-node-v0
            start-node-success-v0
-           start-node-success-v0-client-id
-           start-node-success-v0-type
            start-node-failure-v0
-           start-node-failure-v0-client-id
-           start-node-failure-v0-type
-           start-node-failure-v0-reason-cat
-           start-node-failure-v0-reason-msg
-           make-shutdown-worker-v0))
+           shutdown-worker-v0))
 (in-package :monomyth/mmop-master)
 
-(defstruct (worker-ready-v0 (:constructor make-worker-ready-v0 (client-id)))
-  "MMOP/0 worker-ready"
-  (client-id (error "client id must be set") :read-only t))
+(adt:defdata sent-mmop
+  ;; client-id
+  (pong-v0 string)
+  ;; client-id
+  (start-node-request-success-v0 string)
+  ;; client-id error-reason status-code
+  (start-node-request-failure-v0 string string integer)
+  ;; client-id json-response
+  (json-info-response-v0 string string)
+  ;; client-id recipe
+  (start-node-v0 string node-recipe)
+  ;; client-id
+  (stop-worker-request-success-v0 string)
+  ;; client-id error-message status-code
+  (stop-worker-request-failure-v0 string string integer)
+  ;; client-id
+  (shutdown-worker-v0 string))
 
-(defstruct (start-node-v0 (:constructor make-start-node-v0 (client-id recipe)))
-  "MMOP/0 start-node"
-  (client-id (error "client id must be set") :read-only t)
-  (recipe (error "recipe must be set") :read-only t))
+(adt:defdata received-mmop
+  ;; client-id
+  (ping-v0 string)
+  ;; client-id
+  (recipe-info-v0 string)
+  ;; client-id
+  (worker-info-v0 string)
+  ;; client-id recipe-type
+  (start-node-request-v0 string string)
+  ;; client-id worker-id
+  (stop-worker-request-v0 string string)
+  ;; client-id
+  (worker-ready-v0 string)
+  ;; client-id type
+  (start-node-success-v0 string string)
+  ;; client-id type reason-category reason-message
+  (start-node-failure-v0 string string string string))
+
+(defmethod create-frames ((message pong-v0))
+  `(,(pong-v0%0 message) ,*mmop-v0* "PONG"))
+
+(defmethod create-frames ((message json-info-response-v0))
+  `(,(json-info-response-v0%0 message) ,*mmop-v0* "JSON-INF0-RESPONSE"
+    ,(json-info-response-v0%1 message)))
+
+(defmethod create-frames ((message start-node-request-success-v0))
+  `(,(start-node-request-success-v0%0 message) ,*mmop-v0* "START-NODE-REQUEST-SUCCESS"))
+
+(defmethod create-frames ((message start-node-request-failure-v0))
+  `(,(start-node-request-failure-v0%0 message) ,*mmop-v0* "START-NODE-REQUEST-FAILURE"
+    ,(start-node-request-failure-v0%1 message)
+    ,(write-to-string (start-node-request-failure-v0%2 message))))
+
+(defmethod create-frames ((message stop-worker-request-success-v0))
+  `(,(stop-worker-request-success-v0%0 message) ,*mmop-v0* "STOP-WORKER-REQUEST-SUCCESS"))
+
+(defmethod create-frames ((message stop-worker-request-failure-v0))
+  `(,(stop-worker-request-failure-v0%0 message) ,*mmop-v0* "STOP-WORKER-REQUEST-FAILURE"
+    ,(stop-worker-request-failure-v0%1 message)
+    ,(write-to-string (stop-worker-request-failure-v0%2 message))))
+
 (defmethod create-frames ((message start-node-v0))
-  (let ((recipe (start-node-v0-recipe message)))
-    `(,(start-node-v0-client-id message) ,*mmop-v0* "START-NODE"
+  (let ((recipe (start-node-v0%1 message)))
+    `(,(start-node-v0%0 message) ,*mmop-v0* "START-NODE"
       ,(symbol-name (node-recipe/type recipe))
       ,(serialize-recipe recipe))))
 
-(defstruct (start-node-success-v0
-            (:constructor make-start-node-success-v0 (client-id type)))
-  "MMOP/0 start-node-success"
-  (client-id (error "client id must be set") :read-only t)
-  (type (error "type must be set") :read-only t))
-
-(defstruct (start-node-failure-v0
-            (:constructor make-start-node-failure-v0
-                (client-id type reason-cat reason-msg)))
-  "MMOP/0 start-node-failure"
-  (client-id (error "client id must be set") :read-only t)
-  (type (error "type must be set") :read-only t)
-  (reason-cat (error "reason must be set") :read-only t)
-  (reason-msg (error "reason must be set") :read-only t))
-
-(defstruct (shutdown-worker-v0
-            (:constructor make-shutdown-worker-v0 (client-id)))
-  "MMOP/0 stop-worker"
-  (client-id (error "client id must be set") :read-only t))
 (defmethod create-frames ((message shutdown-worker-v0))
-  `(,(shutdown-worker-v0-client-id message) ,*mmop-v0* "SHUTDOWN"))
+  `(,(shutdown-worker-v0%0 message) ,*mmop-v0* "SHUTDOWN"))
 
 (defun pull-master-message (socket)
   "pulls down a message designed for the master router socket and attempts to
 translate it into an equivalent struct"
   (with (((id version &rest args) (pull-msg socket)))
-    (unless (member version *mmop-verions* :test 'string=)
+    (v:debug '(:mmop :master) "pulled message (~{~a~^, ~}) from ~a with MMOP version ~a"
+             args id version)
+    (unless (member version *mmop-versions* :test 'string=)
       (error 'mmop-error :message
              (format nil "unrecognized mmop version: ~a" version)))
 
@@ -66,11 +106,18 @@ translate it into an equivalent struct"
 (defun translate-v0 (id args)
   "attempts to translate the arg frames into MMOP/0 structs"
   (let ((res (trivia:match args
-               ((list "READY") (make-worker-ready-v0 id))
+               ((list "PING") (ping-v0 id))
+               ((list "RECIPE-INFO") (recipe-info-v0 id))
+               ((list "WORKER-INFO") (worker-info-v0 id))
+               ((list "START-NODE-REQUEST" recipe-type)
+                (start-node-request-v0 id recipe-type))
+               ((list "STOP-WORKER-REQUEST" worker-id)
+                (stop-worker-request-v0 id worker-id))
+               ((list "READY") (worker-ready-v0 id))
                ((list "START-NODE-SUCCESS" node-type)
-                (make-start-node-success-v0 id node-type))
+                (start-node-success-v0 id node-type))
                ((list "START-NODE-FAILURE" node-type cat msg)
-                (make-start-node-failure-v0 id node-type cat msg)))))
+                (start-node-failure-v0 id node-type cat msg)))))
 
     (if res res
         (error 'mmop-error :version *mmop-v0* :message "unknown mmop command"))))

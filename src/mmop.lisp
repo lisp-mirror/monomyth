@@ -1,7 +1,7 @@
 (defpackage monomyth/mmop
   (:use :cl :rutils.bind)
   (:export *mmop-v0*
-           *mmop-verions*
+           *mmop-versions*
            mmop-error
            mmop-error/version
            mmop-error/message
@@ -12,7 +12,7 @@
 (in-package :monomyth/mmop)
 
 (defparameter *mmop-v0* "MMOP/0")
-(defparameter *mmop-verions* `(,*mmop-v0*))
+(defparameter *mmop-versions* `(,*mmop-v0*))
 
 (define-condition mmop-error (error)
   ((message :initarg :message
@@ -47,8 +47,10 @@
           ((vector (unsigned-byte 8))
            (cffi-sys:with-pointer-to-vector-data (ptr (subseq frame 0))
              (pzmq:send socket ptr :len (length frame) :sndmore (/= len i))))
-          (t (error 'mmop-error :version version
-                    :message "unrecognized frame type")))))))
+          (t (error 'mmop-error
+                    :version version
+                    :message (format nil "unrecognized frame type (~a)"
+                                     (type-of frame)))))))))
 
 (defgeneric create-frames (message)
   (:documentation "takes a message struct and builds a list of zmq frames to be sent"))

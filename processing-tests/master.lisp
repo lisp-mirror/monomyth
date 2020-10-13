@@ -1,7 +1,7 @@
 (defpackage monomyth/processing-tests/master
   (:use :cl :rove :monomyth/processing-tests/utils :monomyth/rmq-node :monomyth/node
    :cl-rabbit :monomyth/rmq-node-recipe :monomyth/master :monomyth/node-recipe
-   :stmx.util))
+   :monomyth/mmop :stmx.util))
 (in-package :monomyth/processing-tests/master)
 
 (v:output-here *terminal-io*)
@@ -16,6 +16,8 @@
 
 (defun calculate-batch-size ()
   (+ *batch-min* (random *batch-range*)))
+
+(defparameter *control-name* "CONTROL-API")
 
 (defparameter *queue1* (format nil "processing-queue-1-~a" (get-universal-time)))
 (defparameter *queue2* (format nil "processing-queue-2-~a" (get-universal-time)))
@@ -89,18 +91,28 @@
     (add-recipe master *recipe3*)
     (add-recipe master *recipe4*)
 
-    (iter:iterate
-      (iter:for recipe in *recipes*)
-      (iter:iterate
-        (iter:repeat (1+ (random *threads-per-recipe-range*)))
-        (ask-to-start-node master (symbol-name (node-recipe/type recipe)))))
+    (pzmq:with-context nil
+      (pzmq:with-socket control :dealer
+        (pzmq:setsockopt control :identity *control-name*)
+        (pzmq:connect control (format nil "tcp://localhost:~a" *mmop-port*))
+
+        (iter:iterate
+          (iter:for recipe in *recipes*)
+          (iter:iterate
+            (iter:repeat (1+ (random *threads-per-recipe-range*)))
+            (send-msg control *mmop-v0* (mmop-c:start-node-request-v0
+                                         (symbol-name (node-recipe/type recipe))))))))
 
     (sleep *process-time*)
 
-    (iter:iterate
-      (iter:for worker-id in (ghash-keys (master-workers master)))
-      (ask-to-shutdown-worker master worker-id))
-    (stop-master master)
+    (pzmq:with-context nil
+      (pzmq:with-socket control :dealer
+        (pzmq:setsockopt control :identity *control-name*)
+        (pzmq:connect control (format nil "tcp://localhost:~a" *mmop-port*))
+
+        (iter:iterate
+          (iter:for worker-id in (ghash-keys (master-workers master)))
+          (send-msg control *mmop-v0* (mmop-c:stop-worker-request-v0 worker-id)))))
 
     (startup work-node nil)
     (labels ((get-msg-w-restart ()

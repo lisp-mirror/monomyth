@@ -1,8 +1,9 @@
 @startuml
 
-() MMOP
+() MMOP_Workers
+() MMOP_Control
 
-Note right of MMOP : Built on ZMQ
+Note right of MMOP_Workers : Built on ZMQ
 
 database "Data Stream" {
         [Data Queues]
@@ -35,9 +36,14 @@ node "Worker Server 2" {
 }
 
 node "Master Server" {
-        MMOP -- [Master Object]
-        MMOP -- [Worker Object 1]
-        [Worker Object 2] -- MMOP
+        MMOP_Workers -- [Master Object]
+        MMOP_Workers -- [Worker Object 1]
+        [Worker Object 2] -- MMOP_Workers
+        [Master Object] -- MMOP_Control
+}
+
+node "Control API Server" {
+        MMOP_Control -- [Control Endpoints]
 }
 
 @enduml

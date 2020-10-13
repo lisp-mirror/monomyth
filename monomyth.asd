@@ -1,5 +1,5 @@
 (defsystem "monomyth"
-  :version "0.1.0"
+  :version "0.2.0"
   :author "Paul Ricks"
   :license "MPL 2.0"
   :components ((:module "src"
@@ -7,8 +7,10 @@
                 ((:file "node-recipe")
                  (:file "mmop")
                  (:file "mmop-worker"
-                  :components ("mmop"))
+                  :components ("mmop" "node-recipe"))
                  (:file "mmop-master"
+                  :components ("mmop" "node-recipe"))
+                 (:file "mmop-control"
                   :components ("mmop" "node-recipe"))
                  (:file "node")
                  (:file "rmq-node"
@@ -26,7 +28,10 @@
                :closer-mop
                :rutils
                :trivia
+               :jonathan
+               :fset
                :alexandria
+               :cl-algebraic-data-type
                :pzmq
                :uuid
                :iterate
@@ -36,11 +41,25 @@
   :description "A distributed data processing library for CL"
   :in-order-to ((test-op (test-op "monomyth/tests"))))
 
+(defsystem "monomyth/control-api"
+  :version "0.2.0"
+  :author "Paul Ricks"
+  :license "MPL 2.0"
+  :depends-on (:monomyth
+               :lucerne
+               :woo)
+  :components ((:module "src/control-api"
+                :components ((:file "main"))))
+  :description "Control rest api for monomyth")
+
 (defsystem "monomyth/tests"
   :author "Paul Ricks"
-  :license "MPL 2.2"
+  :license "MPL 2.0"
   :depends-on (:monomyth
+               :monomyth/control-api
                :rove
+               :quri
+               :dexador
                :cl-mock)
   :components ((:module "tests"
                 :components
@@ -53,34 +72,9 @@
                  (:file "rmq-worker"
                   :depends-on ("utils"))
                  (:file "master"
-                  :depends-on ("utils")))))
+                  :depends-on ("utils"))
+                 (:file "control-api"))))
   :description "Test system for monomyth"
-  :perform (test-op (op c) (symbol-call :rove '#:run c)))
-
-(defsystem "monomyth/communication-tests-master"
-  :author "Paul Ricks"
-  :license "MPL 2.0"
-  :depends-on (:monomyth
-               :monomyth/tests
-               :rove)
-  :components ((:module "communication-tests/master"
-                :components
-                ((:file "mmop")
-                 (:file "rmq-worker"))))
-  :description "Test system for monomyth for inter machine communication, master perspective"
-  :perform (test-op (op c) (symbol-call :rove '#:run c)))
-
-(defsystem "monomyth/communication-tests-worker"
-  :author "Paul Ricks"
-  :license "MPL 2.0"
-  :depends-on (:monomyth
-               :monomyth/tests
-               :rove)
-  :components ((:module "communication-tests/worker"
-                :components
-                ((:file "mmop")
-                 (:file "rmq-worker"))))
-  :description "Test system for monomyth for inter machine communication, worker perspective"
   :perform (test-op (op c) (symbol-call :rove '#:run c)))
 
 (defsystem "monomyth/processing-tests-master"

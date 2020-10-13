@@ -1,6 +1,6 @@
 (defpackage monomyth/master
   (:use :cl :stmx :stmx.util :monomyth/mmop :monomyth/node-recipe :trivia
-        :monomyth/mmop-master)
+        :monomyth/mmop-master :jonathan)
   (:export start-master
            stop-master
            master-workers
@@ -15,7 +15,6 @@
 
 (setf *arity-check-by-test-call* nil)
 (defparameter *internal-conn-name* "inproc://mmop-master-routing")
-(defparameter *ready-message* "READY")
 (defparameter *end-message* "END")
 (defparameter *router-thread-name* "monomyth-master-router")
 (defparameter *worker-thread-prefix* "monomyth-worker-thread")
@@ -40,23 +39,18 @@ and a table of node type symbols to node recipes"
       (context (pzmq:ctx-new)
        :read-only t
        :transactional nil)
-      (outbound-socket nil
-       :transactional nil)
       (running t)))
 
 (defun start-master (thread-count client-port)
   "starts up all worker threads and the router loop for load balancing"
   (v:info :master "starting master server with ~a threads listening for workers at port ~a"
           thread-count client-port)
-  (let ((master (build-master)))
-    (let ((socket (pzmq:socket (master-context master) :router)))
-      (atomic (setf (master-outbound-socket master) socket))
-      (pzmq:bind socket (format nil "tcp://*:~a" client-port)))
-
-    (iter:iterate
-      (iter:repeat thread-count)
-      (start-handler-thread master))
-    (start-router-loop master thread-count)
+  (let* ((master (build-master))
+         (thread-names
+           (iter:iterate
+             (iter:repeat thread-count)
+             (iter:collect (start-handler-thread master)))))
+    (start-router-loop master client-port thread-count thread-names)
     master))
 
 (defun stop-master (master)
@@ -70,26 +64,47 @@ and a table of node type symbols to node recipes"
                                       (rtl:starts-with *worker-thread-prefix* th-name))))
                  (bt:all-threads)))
       (bt:destroy-thread th))
-    (pzmq:close (master-outbound-socket master))
     (pzmq:ctx-destroy context)))
 
-(defun start-router-loop (master thread-count)
+(defun start-router-loop (master client-port thread-count thread-names)
   "runs the thread router's event loop in a new thread"
   (bt:make-thread
    #'(lambda ()
-       (pzmq:with-socket (threads (master-context master)) :router
+       (pzmq:with-sockets (((threads (master-context master)) :router)
+                           ((clients (master-context master)) :router))
          (pzmq:bind threads *internal-conn-name*)
+         (pzmq:bind clients (format nil "tcp://*:~a" client-port))
 
-         (iter:iterate
-           (iter:while (master-running master))
-           (iter:for worker-id = (first (handle-pull-msg threads "get-thread")))
-           (unless worker-id (iter:next-iteration))
-           (iter:for msg-frames = (handle-pull-msg (master-outbound-socket master) "get-msg"))
-           (unless msg-frames (iter:next-iteration))
-           (forward-frames-to-worker threads worker-id msg-frames)
+         (pzmq:with-poll-items items (threads clients)
+           (iter:iterate
+             (iter:with wrker-count = 0)
+             (iter:while (master-running master))
+             (pzmq:poll items)
 
-           (iter:finally (end-threads threads thread-count)))))
+             (when (member :pollin (pzmq:revents items 0))
+              (route-outgoing-message clients threads))
+
+             (when (member :pollin (pzmq:revents items 1))
+               (route-incoming-message
+                clients threads (nth (mod wrker-count thread-count) thread-names))
+               (incf wrker-count))
+
+             (iter:finally (end-threads threads thread-count))))))
    :name *router-thread-name*))
+
+(defun route-outgoing-message (clients threads)
+  (let ((frames (handle-pull-msg threads "get-inbound-msg")))
+    (v:debug '(:master.router.outgoing)
+             "received message: (~{~a~^, ~})" frames)
+    (forward-frames-to-client clients frames)
+    (v:debug '(:master.router.outgoing) "forwarded message to client")))
+
+(defun route-incoming-message (clients threads worker-id)
+  (let ((msg-frames (handle-pull-msg clients "get-inbound-msg")))
+    (v:debug '(:master.router.incoming)
+             "received message: (~{~a~^, ~})" msg-frames)
+    (forward-frames-to-worker threads worker-id msg-frames)
+    (v:debug '(:master.router.incoming) "forwarded message to worker")))
 
 (defun end-threads (socket thread-count)
   "sends a message to all threads, allowing them to cycle and so to quit"
@@ -98,11 +113,18 @@ and a table of node type symbols to node recipes"
     (iter:for worker-id = (first (handle-pull-msg socket "get-thread")))
     (forward-frames-to-worker socket worker-id `(,*end-message* ,*end-message*))))
 
+(defun forward-frames-to-client (socket frames)
+  "drops unneeded frames and sends them to the client"
+  (handler-case (send-msg-frames socket *mmop-v0* (cdr frames))
+    (mmop-error (c)
+      (v:error '(:master.router :mmop) "could not forward outbound message: ~a"
+               (mmop-error/message c)))))
+
 (defun forward-frames-to-worker (socket thread-id frames)
   "constructs the message frames and sends them on to the thread"
-  (handler-case (send-msg-frames socket nil (append `(,thread-id "") frames))
+  (handler-case (send-msg-frames socket *mmop-v0* (cons thread-id frames))
     (mmop-error (c)
-      (v:error '(:master.router :mmop) "could not forward message: ~a"
+      (v:error '(:master.router :mmop) "could not forward inbound message: ~a"
                (mmop-error/message c)))))
 
 (defun handle-pull-msg (socket step)
@@ -119,38 +141,51 @@ and a table of node type symbols to node recipes"
   (let ((idenifier (format nil "~a-~a" *worker-thread-prefix* (uuid:make-v4-uuid))))
     (bt:make-thread
      #'(lambda ()
-         (pzmq:with-socket (router (master-context master)) :req
+         (pzmq:with-socket (router (master-context master)) :dealer
            (pzmq:setsockopt router :identity idenifier)
            (pzmq:connect router *internal-conn-name*)
 
            (iter:iterate
              (iter:while (master-running master))
-             (pzmq:send router *ready-message*)
-             (handler-case (handle-message master (mmop-m:pull-master-message router))
+             (handler-case (handle-message master router (mmop-m:pull-master-message router))
                (mmop-error (c)
                  (v:error '(:master.handler :mmop)
                           "could not pull MMOP message (version: ~a): ~a"
                           (mmop-error/version c) (mmop-error/message c)))))))
-     :name idenifier)))
+     :name idenifier)
+    idenifier))
 
-(defun handle-message (master mmop-msg)
-  "handles a specific message for the master, return t if the master should continue"
-  (let ((res (match mmop-msg
-               ((mmop-m:worker-ready-v0 :client-id client-id)
-                (add-worker master client-id))
+(defun handle-message (master socket mmop-msg)
+  "handles a specific message for the master"
+  (adt:match received-mmop mmop-msg
+    ((ping-v0 client-id)
+     (send-pong-v0 socket client-id))
 
-               ((mmop-m:start-node-success-v0
-                 :client-id id :type type-id)
-                (start-successful master id type-id))
+    ((recipe-info-v0 client-id)
+     (send-recipe-info master socket client-id))
 
-               ((mmop-m:start-node-failure-v0
-                 :client-id id :type type-id :reason-cat cat :reason-msg msg)
-                (start-unsuccessful master id type-id cat msg)))))
+    ((worker-info-v0 client-id)
+     (send-worker-info master socket client-id))
 
-    (unless res
-      (v:error '(:master.handler.event-loop :mmop)
-               "did not recognize [~a] in worker event loop" mmop-msg))
-    t))
+    ((start-node-request-v0 client-id recipe-type)
+     (ask-to-start-node master socket client-id recipe-type))
+
+    ((stop-worker-request-v0 client-id worker-id)
+     (ask-to-shutdown-worker master socket client-id worker-id))
+
+    ((worker-ready-v0 client-id)
+     (add-worker master client-id))
+
+    ((start-node-success-v0 id type-id)
+     (start-successful master id type-id))
+
+    ((start-node-failure-v0 id type-id cat msg)
+     (start-unsuccessful master id type-id cat msg))))
+
+(defun send-pong-v0 (socket client-id)
+  (v:debug '(:master.handler.ping) "got message (~a)" client-id)
+  (send-msg socket *mmop-v0* (pong-v0 client-id))
+  (v:debug '(:master.handler.ping) "sent pong"))
 
 (defun start-unsuccessful (master client-id type-id cat msg)
   "removes the record of the outstanding request"
@@ -188,6 +223,57 @@ and a table of node type symbols to node recipes"
          (build-worker-info))))
 
 (transaction
+    (defun pull-worker-type-running-info (worker)
+      "takes a worker-info and produces an fset map that links each recipe type
+to a plist with :running"
+      (reduce #'(lambda (acc val) (fset:with acc (car val) `(:|running| ,(cdr val))))
+              (ghash-pairs (worker-info-type-counts worker))
+              :initial-value (fset:empty-map))))
+
+(transaction
+    (defun pull-worker-type-queued-info (worker)
+      "takes a worker-info and produces an fset map that links each recipe type
+to a plist with :queued"
+      (reduce #'(lambda (acc val) (fset:with acc (car val) `(:|queued| ,(cdr val))))
+              (ghash-pairs (worker-info-outstanding-request-counts worker))
+              :initial-value (fset:empty-map))))
+
+(transaction
+    (defun pull-worker-type-info (worker)
+      "takes a worker-info and produces an fset map that links each recipe type
+to a plist with :running and :queued"
+      (fset:map-union (pull-worker-type-queued-info worker)
+                      (pull-worker-type-running-info worker)
+                      #'append)))
+
+(defun combine-type-plist (l1 l2)
+  "takes two type count plists and combines the counts"
+  (flet ((add-property (prop) (+ (getf l1 prop 0) (getf l2 prop 0))))
+    `(:|running| ,(add-property :|running|) :|queued| ,(add-property :|queued|))))
+
+(transaction
+    (defun pull-master-type-info (master)
+      "takes a master object and produces an fset map that links each recipe type
+to a plist with :running and :queued"
+      (reduce
+       #'(lambda (acc val) (fset:map-union acc val #'combine-type-plist))
+       (mapcar #'pull-worker-type-info (ghash-values (master-workers master)))
+       :initial-value (fset:empty-map))))
+
+(defun send-recipe-info (master socket client-id)
+  (let ((info-map (atomic (pull-master-type-info master))))
+    (send-msg
+     socket *mmop-v0*
+     (json-info-response-v0
+      client-id
+      (to-json
+       (fset:reduce
+        #'(lambda (acc key val)
+            (append `((:|type| ,key :|counts| ,val)) acc))
+        info-map
+        :initial-value '()))))))
+
+(transaction
     (defun total-posible-nodes (worker type-id)
       "calculates the total possible worker threads of that type"
       (+ (get-ghash (worker-info-type-counts worker) type-id 0)
@@ -218,50 +304,103 @@ and a table of node type symbols to node recipes"
                        (symbol-name (node-recipe/type recipe)))
             recipe)))
 
-(defun ask-to-start-node (master type-id)
+(defun start-node (master socket client-id type-id recipe)
+  "Sends the start node request to a client with the supplied recipe"
+  (handler-case
+      (let ((worker-id (determine-worker-for-node master type-id)))
+        (send-msg socket *mmop-v0* (start-node-v0 worker-id recipe))
+        (atomic
+         (let ((val (get-ghash
+                     (worker-info-outstanding-request-counts
+                      (get-ghash (master-workers master) worker-id))
+                     type-id 0)))
+           (setf (get-ghash
+                  (worker-info-outstanding-request-counts
+                   (get-ghash (master-workers master) worker-id))
+                  type-id)
+                 (1+ val))))
+        (send-msg socket *mmop-v0* (start-node-request-success-v0 client-id)))
+
+    (mmop-error (c)
+      (progn
+        (v:error :master.handler
+                 "could not send start node message (mmop version: ~a): ~a"
+                 (mmop-error/version c) (mmop-error/message c))))))
+
+(defun confirm-start-node-failure (socket client-id message code)
+  "Sends a request failure message to the client with the supplied message."
+  (handler-case
+      (send-msg socket *mmop-v0* (start-node-request-failure-v0 client-id message code))
+
+    (mmop-error (c)
+      (v:error :master.handler
+               "could not send start node failed message (mmop version: ~a): ~a"
+               (mmop-error/version c) (mmop-error/message c)))))
+
+(defun ask-to-start-node (master socket client-id type-id)
   "attempts to start a node of type-id on one of the masters workers.
 returns t if it works, nil otherwise"
+  (v:info :master "requesting to start node ~a" type-id)
   (let ((recipe (get-ghash (master-recipes master) type-id)))
-    (if recipe
-        (handler-case
-            (let ((worker-id (determine-worker-for-node master type-id)))
-              (send-msg (master-outbound-socket master) *mmop-v0*
-                        (mmop-m:make-start-node-v0 worker-id recipe))
-              (atomic
-               (let ((val (get-ghash
-                           (worker-info-outstanding-request-counts
-                            (get-ghash (master-workers master) worker-id))
-                           type-id 0)))
-                 (setf (get-ghash
-                        (worker-info-outstanding-request-counts
-                         (get-ghash (master-workers master) worker-id))
-                        type-id)
-                       (1+ val))))
-              t)
-          (mmop-error (c)
-            (progn
-              (v:error :master.handler
-                       "could not send start node message (mmop version: ~a): ~a"
-                       (mmop-error/version c) (mmop-error/message c))
-              nil)))
-        (progn (v:error :master.handler "could not find recipe type ~a" type-id)
-               nil))))
+    (cond
+      ((ghash-table-empty? (master-workers master))
+       (let ((msg "no active worker servers"))
+         (v:error :master.handler.start-node msg)
+         (confirm-start-node-failure socket client-id msg 503)))
 
-(defun ask-to-shutdown-worker (master worker-id)
+      (recipe (start-node master socket client-id type-id recipe))
+
+      (t (let ((msg (format nil "could not find recipe type ~a" type-id)))
+           (v:error :master.handler.start-node msg)
+           (confirm-start-node-failure socket client-id msg 400))))))
+
+(defun ask-to-shutdown-worker (master socket client-id worker-id)
   "uses a master to tell a worker to shutdown via MMOP.
 No state in the master is currently changes, returns t if the call seems to have
 been sent, nil otherwise"
+  (v:info :master "requesting to stop worker ~a" worker-id)
   (if (get-ghash (master-workers master) worker-id)
       (handler-case
-          (send-msg (master-outbound-socket master) *mmop-v0*
-                    (mmop-m:make-shutdown-worker-v0 worker-id))
+          (progn
+            (send-msg socket *mmop-v0* (shutdown-worker-v0 worker-id))
+            (send-msg socket *mmop-v0* (stop-worker-request-success-v0 client-id)))
+
         (mmop-error (c)
           (progn
-            (v:error :master.handler
+            (v:error :master.handler.shutdown-worker
                      "could not send stop worker message (mmop version: ~a): ~a"
-                     (mmop-error/version c) (mmop-error/message c))
-            nil))
-        (:no-error (res) (declare (ignore res)) t))
+                     (mmop-error/version c) (mmop-error/message c)))))
       (progn
-        (v:error :master "could not shutdown unrecognized worker ~a" worker-id)
-        nil)))
+        (let ((msg (format nil "could not shutdown unrecognized worker ~a" worker-id)))
+          (v:warn :master.handler.shutdown-worker msg)
+          (handler-case
+              (send-msg socket *mmop-v0* (stop-worker-request-failure-v0 client-id msg 400))
+
+            (mmop-error (c)
+              (v:error :master.handler.shutdown-worker
+                       "could not send stop worker message (mmop version: ~a): ~a"
+                       (mmop-error/version c) (mmop-error/message c))))))))
+
+(transaction
+    (defun get-worker-type-info (worker)
+      "translates a worker type count map object into an equivalent list of plists"
+      (mapcar
+       #'(lambda (type-pair)
+           `(:|recipe_name| ,(car type-pair) :|node_count| ,(cdr type-pair)))
+       (ghash-pairs
+        (worker-info-type-counts worker)))))
+
+(transaction
+    (defun get-all-worker-type-info (master)
+      "translates all workers into plists with node information"
+      (mapcar
+       #'(lambda (worker-pair)
+           `(:|worker_id| ,(car worker-pair)
+             :|nodes| ,(get-worker-type-info (cdr worker-pair))))
+       (ghash-pairs (master-workers master)))))
+
+(defun send-worker-info (master socket client-id)
+  "responds to a worker-info message by pulling the info and turning it into json"
+  (send-msg socket *mmop-v0*
+            (json-info-response-v0
+             client-id (to-json (get-all-worker-type-info master)))))
