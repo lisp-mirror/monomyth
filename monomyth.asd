@@ -1,5 +1,5 @@
 (defsystem "monomyth"
-  :version "0.1.0"
+  :version "0.2.0"
   :author "Paul Ricks"
   :license "MPL 2.0"
   :components ((:module "src"
@@ -42,6 +42,7 @@
   :in-order-to ((test-op (test-op "monomyth/tests"))))
 
 (defsystem "monomyth/control-api"
+  :version "0.2.0"
   :author "Paul Ricks"
   :license "MPL 2.0"
   :depends-on (:monomyth
