@@ -21,7 +21,9 @@
                   :depends-on ("node" "mmop" "mmop-worker"))
                  (:file "rmq-worker"
                   :depends-on ("worker" "node" "rmq-node" "node-recipe" "rmq-node-recipe"))
-                 (:file "master"))))
+                 (:file "master")
+                 (:file "dsl"
+                  :depends-on ("node-recipe" "rmq-node-recipe" "node" "rmq-node" "worker" "rmq-worker")))))
   :depends-on (:flexi-streams
                :cl-store
                :stmx
