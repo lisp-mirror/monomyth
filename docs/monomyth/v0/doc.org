@@ -103,8 +103,8 @@ which right now limits it to starting nodes and telling workers to shutdown.
 The master server's state is limited to the recipes it knows and what types of
 recipes are running on what workers.
 At startup, the master starts ~n~ handler long lived threads that actually process
-and respond to the MMOP messages the master receives (this is done via the ~req~/~router~
-ZeroMQ load balancing pattern, see http://zguide.zeromq.org/page:chapter3#toc18).
+and respond to the MMOP messages the master receives in a round robin load
+balancing pattern.
 
 ** Control API Server
 The control api is a REST server that communicates via MMOP to issue operating
