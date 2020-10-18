@@ -6,12 +6,6 @@
 (in-package :monomyth/tests/master)
 
 (defparameter *test-process-time* 5)
-(defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
-(defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
-(defparameter queue-1 (format nil "process-test-~a-1" (get-universal-time)))
-(defparameter queue-2 (format nil "process-test-~a-2" (get-universal-time)))
-(defparameter queue-3 (format nil "process-test-~a-3" (get-universal-time)))
-(defparameter queue-4 (format nil "process-test-~a-4" (get-universal-time)))
 (v:output-here *terminal-io*)
 
 (teardown
@@ -23,10 +17,10 @@
       (queue-delete conn 1 queue-2)
       (queue-delete conn 1 queue-3)
       (queue-delete conn 1 queue-4)
-      (queue-delete conn 1 "TEST1-fail")
-      (queue-delete conn 1 "TEST2-fail")
-      (queue-delete conn 1 "TEST3-fail")
-      (queue-delete conn 1 "TEST-fail"))
+      (queue-delete conn 1 "TEST-NODE1-fail")
+      (queue-delete conn 1 "TEST-NODE2-fail")
+      (queue-delete conn 1 "TEST-NODE3-fail")
+      (queue-delete conn 1 "TEST-NODE-fail"))
     (destroy-connection conn)))
 
 (deftest start-stop
@@ -43,8 +37,8 @@
          (client2-name (format nil "client-~a" (uuid:make-v4-uuid)))
          (client3-name (format nil "client-~a" (uuid:make-v4-uuid)))
          (clients `(,client1-name ,client2-name ,client3-name))
-         (recipe1 (build-test-recipe1 "test1" "test2" 10))
-         (recipe2 (build-test-recipe2 "test2" "test3" 10)))
+         (recipe1 (build-test-node1-recipe))
+         (recipe2 (build-test-node2-recipe)))
 
     (pzmq:with-sockets (((client1 (master-context master)) :dealer)
                         ((client2 (master-context master)) :dealer)
@@ -83,7 +77,7 @@
         (ok (= 2 (ghash-table-count (master-recipes master))))
         (iter:iterate
           (iter:for type-id in (ghash-keys (master-recipes master)))
-          (ok (member type-id '("TEST1" "TEST2") :test #'string=))))
+          (ok (member type-id '("TEST-NODE1" "TEST-NODE2") :test #'string=))))
 
       (let ((c1-reqs nil)
             (c2-reqs nil)
@@ -116,27 +110,27 @@
                   (pzmq:setsockopt client :identity client-name)
                   (pzmq:connect client uri)
 
-                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
+                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE1"))
                   (sleep .1)
-                  (test-clients-got-message "TEST1" recipe1)
+                  (test-clients-got-message "TEST-NODE1" recipe1)
                   (test-request-success client)
-                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
+                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE1"))
                   (sleep .1)
-                  (test-clients-got-message "TEST1" recipe1)
+                  (test-clients-got-message "TEST-NODE1" recipe1)
                   (test-request-success client)
-                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
+                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE1"))
                   (sleep .1)
-                  (test-clients-got-message "TEST1" recipe1)
+                  (test-clients-got-message "TEST-NODE1" recipe1)
                   (test-request-success client)
-                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
+                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE1"))
                   (sleep .1)
-                  (test-clients-got-message "TEST1" recipe1)
+                  (test-clients-got-message "TEST-NODE1" recipe1)
                   (test-request-success client)
-                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST2"))
+                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
                   (sleep .1)
-                  (test-clients-got-message "TEST2" recipe2)
+                  (test-clients-got-message "TEST-NODE2" recipe2)
                   (test-request-success client)
-                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST3"))
+                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
                   (adt:match mmop-c:received-mmop (mmop-c:pull-control-message client)
                     ((mmop-c:start-node-request-failure-v0 _)
                      (pass "request succeeded message"))
@@ -234,8 +228,8 @@
   (testing "one worker - one node"
     (let ((work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *source-queue* *dest-queue* *dest-queue* 10 *rmq-host*
-                             *rmq-user* *rmq-pass*))
+                             *source-queue* *dest-queue* *dest-queue* :work 10 *rmq-host*
+                             *rmq-port* *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
@@ -246,7 +240,7 @@
       (let* ((client-port 55555)
              (uri (format nil "tcp://localhost:~a" client-port))
              (client-name (format nil "node-client-~a" (uuid:make-v4-uuid)))
-             (recipe1 (build-test-recipe *source-queue* *dest-queue*))
+             (recipe1 (build-test-node-recipe))
              (master (start-master 2 client-port))
              (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
         (bt:make-thread #'(lambda ()
@@ -262,7 +256,7 @@
           (pzmq:with-socket client :dealer
             (pzmq:setsockopt client :identity client-name)
             (pzmq:connect client uri)
-            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST"))
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE"))
             (test-request-success client)
 
             (sleep *test-process-time*)
@@ -274,8 +268,8 @@
 
       (setf work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *dest-queue* *dest-queue* *dest-queue* 10 *rmq-host*
-                             *rmq-user* *rmq-pass*))
+                             *dest-queue* *dest-queue* *dest-queue* :work 10 *rmq-host*
+                             *rmq-port* *rmq-user* *rmq-pass*))
       (startup work-node nil)
       (labels ((get-msg-w-restart ()
                  (handler-case (get-message work-node)
@@ -293,8 +287,8 @@
   (testing "one worker - two nodes"
     (let ((work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-1 queue-2 queue-3 10 *rmq-host*
-                             *rmq-user* *rmq-pass*))
+                             queue-1 queue-2 queue-3 :work 10 *rmq-host*
+                             *rmq-port* *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
@@ -305,8 +299,8 @@
       (let* ((client-port 55555)
              (uri (format nil "tcp://localhost:~a" client-port))
              (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
-             (recipe1 (build-test-recipe1 queue-1 queue-2 5))
-             (recipe2 (build-test-recipe2 queue-2 queue-3 10))
+             (recipe1 (build-test-node1-recipe))
+             (recipe2 (build-test-node2-recipe))
              (master (start-master 2 client-port))
              (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
         (bt:make-thread #'(lambda ()
@@ -324,9 +318,9 @@
             (pzmq:setsockopt client :identity client-name)
             (pzmq:connect client uri)
 
-            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE1"))
             (test-request-success client)
-            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST2"))
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
             (test-request-success client)
 
             (sleep *test-process-time*)
@@ -338,8 +332,8 @@
 
       (setf work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-3 *dest-queue* *dest-queue* 10 *rmq-host*
-                             *rmq-user* *rmq-pass*))
+                             queue-3 *dest-queue* *dest-queue* :test 10 *rmq-host*
+                             *rmq-port* *rmq-user* *rmq-pass*))
       (startup work-node nil)
       (labels ((get-msg-w-restart ()
                  (handler-case (get-message work-node)
@@ -357,8 +351,8 @@
   (testing "two workers"
     (let ((work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *source-queue* queue-1 *dest-queue* 10 *rmq-host*
-                             *rmq-user* *rmq-pass*))
+                             *source-queue* queue-1 *dest-queue* :work 10 *rmq-host*
+                             *rmq-port* *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
@@ -369,9 +363,9 @@
       (let* ((client-port 55555)
              (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
              (uri (format nil "tcp://localhost:~a" client-port))
-             (recipe1 (build-test-recipe1 queue-1 queue-2 5))
-             (recipe2 (build-test-recipe2 queue-2 queue-3 10))
-             (recipe3 (build-test-recipe3 queue-3 queue-4 4))
+             (recipe1 (build-test-node1-recipe))
+             (recipe2 (build-test-node2-recipe))
+             (recipe3 (build-test-node3-recipe))
              (master (start-master 2 client-port))
              (worker1 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
              (worker2 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
@@ -396,15 +390,15 @@
             (pzmq:setsockopt client :identity client-name)
             (pzmq:connect client uri)
 
-            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST3"))
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
             (test-request-success client)
-            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST3"))
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
             (test-request-success client)
-            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST2"))
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
             (test-request-success client)
-            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST1"))
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE1"))
             (test-request-success client)
-            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST2"))
+            (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
             (test-request-success client)
 
             (sleep *test-process-time*)
@@ -418,8 +412,8 @@
 
       (setf work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-4 *dest-queue* *dest-queue* 10 *rmq-host*
-                             *rmq-user* *rmq-pass*))
+                             queue-4 *dest-queue* *dest-queue* :work 10 *rmq-host*
+                             *rmq-port* *rmq-user* *rmq-pass*))
       (startup work-node nil)
 
       (let ((results (iter:iterate
