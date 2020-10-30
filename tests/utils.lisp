@@ -42,30 +42,29 @@
 (defparameter *rmq-pass* (uiop:getenv "TEST_RMQ_DEFAULT_PASS"))
 (defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
 (defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
-(defparameter queue-1 (format nil "process-test-~a-1" (get-universal-time)))
-(defparameter queue-2 (format nil "process-test-~a-2" (get-universal-time)))
-(defparameter queue-3 (format nil "process-test-~a-3" (get-universal-time)))
-(defparameter queue-4 (format nil "process-test-~a-4" (get-universal-time)))
+(defparameter queue-1 "START-to-TEST-NODE1")
+(defparameter queue-2 "TEST-NODE1-to-TEST-NODE2")
+(defparameter queue-3 "TEST-NODE2-to-TEST-NODE3")
+(defparameter queue-4 "TEST-NODE3-to-END")
+
+(defun fn1 (item)
+  (format nil "test1 ~a" item))
+
+(defun fn2 (item)
+  (format nil "test2 ~a" item))
+
+(defun fn3 (item)
+  (format nil "test3 ~a" item))
+
+(define-system
+    (:name test-node1 :fn #'fn1 :batch-size 5)
+    (:name test-node2 :fn #'fn2 :batch-size 10)
+    (:name test-node3 :fn #'fn3 :batch-size 4))
 
 (defun fn (item)
   (format nil "test ~a" item))
 
 (define-rmq-node test-node #'fn *source-queue* *dest-queue* 1)
-
-(defun fn1 (item)
-  (format nil "test1 ~a" item))
-
-(define-rmq-node test-node1 #'fn1 queue-1 queue-2 5)
-
-(defun fn2 (item)
-  (format nil "test2 ~a" item))
-
-(define-rmq-node test-node2 #'fn2 queue-2 queue-3 10)
-
-(defun fn3 (item)
-  (format nil "test3 ~a" item))
-
-(define-rmq-node test-node3 #'fn3 queue-3 queue-4 4)
 
 (define-rmq-node work-node nil *dest-queue* *source-queue* 10)
 
