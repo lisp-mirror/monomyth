@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Built define rmq node macro that constructs all of the classes, constructors, 
   and also builds the methods that support building and running nodes.
+- Built define system macro that takes a list of node info an constructs all classes
+  and queues.
 
 ## [0.2.0] - 2020-10-13
 ### Added

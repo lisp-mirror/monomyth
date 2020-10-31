@@ -6,12 +6,6 @@
 (in-package :monomyth/tests/rmq-worker)
 
 (defparameter *test-process-time* 3)
-(defparameter queue-1 (format nil "process-test-~a-1" (get-universal-time)))
-(defparameter queue-2 (format nil "process-test-~a-2" (get-universal-time)))
-(defparameter queue-3 (format nil "process-test-~a-3" (get-universal-time)))
-(defparameter queue-4 (format nil "process-test-~a-4" (get-universal-time)))
-(defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
-(defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
 (v:output-here *terminal-io*)
 
 (teardown

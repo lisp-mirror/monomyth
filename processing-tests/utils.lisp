@@ -34,30 +34,28 @@
 (defparameter *rmq-pass* (uiop:getenv "TEST_RMQ_DEFAULT_PASS"))
 (defparameter *mmop-port* 55555)
 
-(defparameter *queue1* (format nil "processing-queue-1-~a" (get-universal-time)))
-(defparameter *queue2* (format nil "processing-queue-2-~a" (get-universal-time)))
-(defparameter *queue3* (format nil "processing-queue-3-~a" (get-universal-time)))
-(defparameter *queue4* (format nil "processing-queue-4-~a" (get-universal-time)))
-(defparameter *queue5* (format nil "processing-queue-5-~a" (get-universal-time)))
+(defparameter *queue1* "START-to-TEST-NODE1")
+(defparameter *queue2* "TEST-NODE1-to-TEST-NODE2")
+(defparameter *queue3* "TEST-NODE2-to-TEST-NODE3")
+(defparameter *queue4* "TEST-NODE3-to-TEST_NODE4")
+(defparameter *queue5* "TEST-NODE4-to-END")
 
 (define-rmq-node test-node nil *queue1* *queue2* 10)
 
 (defmethod fn1 (item)
   (format nil "~a18" item))
 
-(define-rmq-node test-node1 #'fn1 *queue1* *queue2* 10)
-
 (defmethod fn2 (item)
   (coerce (remove-if #'alpha-char-p (coerce item 'list)) 'string))
-
-(define-rmq-node test-node2 #'fn2 *queue2* *queue3* 10)
 
 (defmethod fn3 (item)
   (format nil "~a" (* (parse-integer item) 7)))
 
-(define-rmq-node test-node3 #'fn3 *queue3* *queue4* 10)
-
 (defmethod fn4 (item)
   (format nil "test ~a" item))
 
-(define-rmq-node test-node4 #'fn4 *queue4* *queue5* 10)
+(define-system
+    (:name test-node1 :fn #'fn1 :batch-size 10)
+    (:name test-node2 :fn #'fn2 :batch-size 10)
+  (:name test-node3 :fn #'fn3 :batch-size 10)
+  (:name test-node4 :fn #'fn4 :batch-size 10))
