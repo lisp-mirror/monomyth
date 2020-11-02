@@ -1,5 +1,5 @@
 (defsystem "monomyth"
-  :version "0.2.0"
+  :version "0.3.0"
   :author "Paul Ricks"
   :license "MPL 2.0"
   :components ((:module "src"
@@ -21,7 +21,9 @@
                   :depends-on ("node" "mmop" "mmop-worker"))
                  (:file "rmq-worker"
                   :depends-on ("worker" "node" "rmq-node" "node-recipe" "rmq-node-recipe"))
-                 (:file "master"))))
+                 (:file "master")
+                 (:file "dsl"
+                  :depends-on ("node-recipe" "rmq-node-recipe" "node" "rmq-node" "worker" "rmq-worker" "master")))))
   :depends-on (:flexi-streams
                :cl-store
                :stmx
@@ -42,7 +44,7 @@
   :in-order-to ((test-op (test-op "monomyth/tests"))))
 
 (defsystem "monomyth/control-api"
-  :version "0.2.0"
+  :version "0.3.0"
   :author "Paul Ricks"
   :license "MPL 2.0"
   :depends-on (:monomyth

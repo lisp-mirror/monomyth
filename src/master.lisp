@@ -1,7 +1,9 @@
 (defpackage monomyth/master
   (:use :cl :stmx :stmx.util :monomyth/mmop :monomyth/node-recipe :trivia
         :monomyth/mmop-master :jonathan)
-  (:export start-master
+  (:export master
+           add-recipes
+           start-master
            stop-master
            master-workers
            master-recipes
@@ -41,6 +43,9 @@ and a table of node type symbols to node recipes"
        :transactional nil)
       (running t)))
 
+(defgeneric add-recipes (master)
+  (:documentation "add all recipes created by the define system macro"))
+
 (defun start-master (thread-count client-port)
   "starts up all worker threads and the router loop for load balancing"
   (v:info :master "starting master server with ~a threads listening for workers at port ~a"
@@ -51,6 +56,7 @@ and a table of node type symbols to node recipes"
              (iter:repeat thread-count)
              (iter:collect (start-handler-thread master)))))
     (start-router-loop master client-port thread-count thread-names)
+    (add-recipes master)
     master))
 
 (defun stop-master (master)
@@ -87,9 +93,7 @@ and a table of node type symbols to node recipes"
              (when (member :pollin (pzmq:revents items 1))
                (route-incoming-message
                 clients threads (nth (mod wrker-count thread-count) thread-names))
-               (incf wrker-count))
-
-             (iter:finally (end-threads threads thread-count))))))
+               (incf wrker-count))))))
    :name *router-thread-name*))
 
 (defun route-outgoing-message (clients threads)
@@ -105,13 +109,6 @@ and a table of node type symbols to node recipes"
              "received message: (~{~a~^, ~})" msg-frames)
     (forward-frames-to-worker threads worker-id msg-frames)
     (v:debug '(:master.router.incoming) "forwarded message to worker")))
-
-(defun end-threads (socket thread-count)
-  "sends a message to all threads, allowing them to cycle and so to quit"
-  (iter:iterate
-    (iter:repeat thread-count)
-    (iter:for worker-id = (first (handle-pull-msg socket "get-thread")))
-    (forward-frames-to-worker socket worker-id `(,*end-message* ,*end-message*))))
 
 (defun forward-frames-to-client (socket frames)
   "drops unneeded frames and sends them to the client"
@@ -307,7 +304,7 @@ to a plist with :running and :queued"
 (defun start-node (master socket client-id type-id recipe)
   "Sends the start node request to a client with the supplied recipe"
   (handler-case
-      (let ((worker-id (determine-worker-for-node master type-id)))
+      (let ((worker-id (atomic (determine-worker-for-node master type-id))))
         (send-msg socket *mmop-v0* (start-node-v0 worker-id recipe))
         (atomic
          (let ((val (get-ghash
@@ -403,4 +400,4 @@ been sent, nil otherwise"
   "responds to a worker-info message by pulling the info and turning it into json"
   (send-msg socket *mmop-v0*
             (json-info-response-v0
-             client-id (to-json (get-all-worker-type-info master)))))
+             client-id (to-json (atomic (get-all-worker-type-info master))))))

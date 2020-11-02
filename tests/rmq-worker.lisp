@@ -6,12 +6,6 @@
 (in-package :monomyth/tests/rmq-worker)
 
 (defparameter *test-process-time* 3)
-(defparameter queue-1 (format nil "process-test-~a-1" (get-universal-time)))
-(defparameter queue-2 (format nil "process-test-~a-2" (get-universal-time)))
-(defparameter queue-3 (format nil "process-test-~a-3" (get-universal-time)))
-(defparameter queue-4 (format nil "process-test-~a-4" (get-universal-time)))
-(defparameter *source-queue* (format nil "test-source-~d" (get-universal-time)))
-(defparameter *dest-queue* (format nil "test-dest-~d" (get-universal-time)))
 (v:output-here *terminal-io*)
 
 (teardown
@@ -19,10 +13,10 @@
    (with-channel (conn 1)
      (queue-delete conn 1 *source-queue*)
      (queue-delete conn 1 *dest-queue*)
-     (queue-delete conn 1 "TEST-fail")
-     (queue-delete conn 1 "TEST1-fail")
-     (queue-delete conn 1 "TEST2-fail")
-     (queue-delete conn 1 "TEST3-fail")
+     (queue-delete conn 1 "TEST-NODE-fail")
+     (queue-delete conn 1 "TEST-NODE1-fail")
+     (queue-delete conn 1 "TEST-NODE2-fail")
+     (queue-delete conn 1 "TEST-NODE3-fail")
      (queue-delete conn 1 queue-1)
      (queue-delete conn 1 queue-2)
      (queue-delete conn 1 queue-3)
@@ -48,7 +42,7 @@
     (pass "worker stopped")))
 
 (deftest worker-can-start-node
-  (let ((recipe (build-test-recipe *source-queue* *dest-queue*)))
+  (let ((recipe (build-test-node-recipe)))
     (bt:make-thread
      #'(lambda ()
          (pzmq:with-context nil
@@ -62,7 +56,7 @@
                   (mmop-m:pull-master-message master)
                   ((mmop-m:start-node-success-v0 new-id msg)
                    (ok (string= new-id client-id))
-                   (ok (string= msg "TEST")))
+                   (ok (string= msg "TEST-NODE")))
                   (_ (fail "unexpected message type")))
                 (send-msg master *mmop-v0* (mmop-m:shutdown-worker-v0 client-id)))
                (_ (fail "unexpected message type")))))))
@@ -107,11 +101,12 @@
 
 (deftest worker-processes-data
   (testing "single node"
-    (let ((recipe1 (build-test-recipe *source-queue* *dest-queue*))
+    (let ((recipe1 (build-test-node-recipe))
           (work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *source-queue* *dest-queue* *dest-queue* 10 *rmq-host*
-                             *rmq-user* *rmq-pass*))
+            (build-test-node
+             (format nil "worknode-~d" (get-universal-time))
+             *dest-queue* *source-queue* *source-queue* :test 10 *rmq-host*
+             *rmq-port* *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
@@ -131,7 +126,7 @@
                     (mmop-m:pull-master-message master)
                     ((mmop-m:start-node-success-v0 new-id msg)
                      (ok (string= new-id client-id))
-                     (ok (string= msg "TEST")))
+                     (ok (string= msg "TEST-NODE")))
                     (_ (fail "unexpected message type")))
                   (sleep *test-process-time*)
                   (send-msg master *mmop-v0* (mmop-m:shutdown-worker-v0 client-id)))
@@ -143,9 +138,10 @@
         (pass "worker stopped"))
 
       (setf work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *dest-queue* *dest-queue* *dest-queue* 10 *rmq-host*
-                             *rmq-user* *rmq-pass*))
+            (build-test-node
+             (format nil "worknode-~d" (get-universal-time))
+             *dest-queue* *source-queue* *source-queue* :test 10 *rmq-host*
+             *rmq-port* *rmq-user* *rmq-pass*))
       (startup work-node nil)
 
       (labels ((get-msg-w-restart ()
@@ -162,13 +158,13 @@
         (shutdown work-node))))
 
   (testing "multiple nodes"
-    (let ((recipe1 (build-test-recipe1 queue-1 queue-2 5))
-          (recipe2 (build-test-recipe2 queue-2 queue-3 10))
-          (recipe3 (build-test-recipe3 queue-3 queue-4 4))
+    (let ((recipe1 (build-test-node1-recipe))
+          (recipe2 (build-test-node2-recipe))
+          (recipe3 (build-test-node3-recipe))
           (work-node
             (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-1 queue-2 queue-3 10 *rmq-host*
-                             *rmq-user* *rmq-pass*))
+                             queue-1 queue-2 queue-3 :work 10 *rmq-host*
+                             *rmq-port* *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
@@ -189,7 +185,7 @@
                     (mmop-m:pull-master-message master)
                     ((mmop-m:start-node-success-v0 new-id msg)
                      (ok (string= new-id client-id))
-                     (ok (string= msg "TEST1")))
+                     (ok (string= msg "TEST-NODE1")))
                     (_ (fail "unexpected message type")))
 
                   (send-msg master *mmop-v0*
@@ -198,7 +194,7 @@
                     (mmop-m:pull-master-message master)
                     ((mmop-m:start-node-success-v0 new-id msg)
                      (ok (string= new-id client-id))
-                     (ok (string= msg "TEST2")))
+                     (ok (string= msg "TEST-NODE2")))
                     (_ (fail "unexpected message type")))
 
                   (send-msg master *mmop-v0*
@@ -207,7 +203,7 @@
                     (mmop-m:pull-master-message master)
                     ((mmop-m:start-node-success-v0 new-id msg)
                      (ok (string= new-id client-id))
-                     (ok (string= msg "TEST3")))
+                     (ok (string= msg "TEST-NODE3")))
                     (_ (fail "unexpected message type")))
 
                   (sleep *test-process-time*)
@@ -220,8 +216,8 @@
         (pass "worker stopped"))
 
       (setf work-node (build-test-node (format nil "worknode-~d" (get-universal-time))
-                                       queue-4 queue-4 queue-4 10 *rmq-host*
-                                       *rmq-user* *rmq-pass*))
+                                       queue-4 queue-4 queue-4 :work 10 *rmq-host*
+                                       *rmq-port* *rmq-user* *rmq-pass*))
       (startup work-node nil)
       (labels ((get-msg-w-restart ()
                  (handler-case (get-message work-node)

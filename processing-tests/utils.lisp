@@ -1,133 +1,61 @@
 (defpackage monomyth/processing-tests/utils
   (:use :cl :monomyth/rmq-worker :monomyth/rmq-node-recipe :monomyth/rmq-node
-        :monomyth/node :monomyth/worker :stmx :monomyth/node-recipe)
+        :monomyth/node :monomyth/worker :stmx :monomyth/node-recipe
+        :monomyth/dsl)
   (:shadow :closer-mop)
   (:export *mmop-port*
            *rmq-host*
+           *rmq-port*
            *rmq-user*
            *rmq-pass*
+           *queue1*
+           *queue2*
+           *queue3*
+           *queue4*
+           *queue5*
            build-test-node
-           testing-node1
-           testing-node2
-           testing-node3
-           testing-node4
-           test-recipe1
-           test-recipe2
-           test-recipe3
-           test-recipe4
-           build-test-recipe1
-           build-test-recipe2
-           build-test-recipe3
-           build-test-recipe4))
+           test-node1
+           test-node2
+           test-node3
+           test-node4
+           test-node1-recipe
+           test-node2-recipe
+           test-node3-recipe
+           test-node4-recipe
+           build-test-node1-recipe
+           build-test-node2-recipe
+           build-test-node3-recipe
+           build-test-node4-recipe))
 (in-package :monomyth/processing-tests/utils)
 
 (defparameter *rmq-host* (uiop:getenv "TEST_PROCESSING_RMQ"))
+(defparameter *rmq-port* 5672)
 (defparameter *rmq-user* (uiop:getenv "TEST_RMQ_DEFAULT_USER"))
 (defparameter *rmq-pass* (uiop:getenv "TEST_RMQ_DEFAULT_PASS"))
 (defparameter *mmop-port* 55555)
 
-(transactional
-    (defclass testing-node (rmq-node) ()))
+(defparameter *queue1* "START-to-TEST-NODE1")
+(defparameter *queue2* "TEST-NODE1-to-TEST-NODE2")
+(defparameter *queue3* "TEST-NODE2-to-TEST-NODE3")
+(defparameter *queue4* "TEST-NODE3-to-TEST_NODE4")
+(defparameter *queue5* "TEST-NODE4-to-END")
 
-(defun build-test-node (name source dest fail size host user pass)
-  (make-instance 'testing-node :name name :source source :dest dest :fail fail
-                               :batch-size size :type :test
-                               :conn (setup-connection :host host
-                                                       :username user
-                                                       :password pass)))
+(define-rmq-node test-node nil *queue1* *queue2* 10)
 
-(transactional
-    (defclass testing-node1 (rmq-node) ()))
-
-(defclass test-recipe1 (rmq-node-recipe) ())
-
-(defun build-test-node1 (name source dest fail size host user pass)
-  (make-instance 'testing-node1 :name name :source source :dest dest :fail fail
-                                :batch-size size :type :test1
-                                :conn (setup-connection :host host
-                                                        :username user
-                                                        :password pass)))
-
-(defun build-test-recipe1 (source dest)
-  (make-instance 'test-recipe1 :source source :dest dest :type :test1))
-
-(defmethod transform-fn ((node testing-node1) item)
+(defmethod fn1 (item)
   (format nil "~a18" item))
 
-(defmethod build-node ((worker rmq-worker) (recipe test-recipe1))
-  (build-test-node1 (name-node recipe) (rmq-node-recipe/source-queue recipe)
-                    (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
-                    (node-recipe/batch-size recipe) (rmq-worker/host worker)
-                    (rmq-worker/username worker) (rmq-worker/password worker)))
-
-(transactional
-    (defclass testing-node2 (rmq-node) ()))
-
-(defclass test-recipe2 (rmq-node-recipe) ())
-
-(defun build-test-node2 (name source dest fail size host user pass)
-  (make-instance 'testing-node2 :name name :source source :dest dest :fail fail
-                                :batch-size size :type :test2
-                                :conn (setup-connection :host host
-                                                        :username user
-                                                        :password pass)))
-
-(defun build-test-recipe2 (source dest)
-  (make-instance 'test-recipe2 :source source :dest dest :type :test2))
-
-(defmethod transform-fn ((node testing-node2) item)
+(defmethod fn2 (item)
   (coerce (remove-if #'alpha-char-p (coerce item 'list)) 'string))
 
-(defmethod build-node ((worker rmq-worker) (recipe test-recipe2))
-  (build-test-node2 (name-node recipe) (rmq-node-recipe/source-queue recipe)
-                    (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
-                    (node-recipe/batch-size recipe) (rmq-worker/host worker)
-                    (rmq-worker/username worker) (rmq-worker/password worker)))
-
-(transactional
-    (defclass testing-node3 (rmq-node) ()))
-
-(defclass test-recipe3 (rmq-node-recipe) ())
-
-(defun build-test-node3 (name source dest fail size host user pass)
-  (make-instance 'testing-node3 :name name :source source :dest dest :fail fail
-                                :batch-size size :type :test3
-                                :conn (setup-connection :host host
-                                                        :username user
-                                                        :password pass)))
-
-(defun build-test-recipe3 (source dest)
-  (make-instance 'test-recipe3 :source source :dest dest :type :test3))
-
-(defmethod transform-fn ((node testing-node3) item)
+(defmethod fn3 (item)
   (format nil "~a" (* (parse-integer item) 7)))
 
-(defmethod build-node ((worker rmq-worker) (recipe test-recipe3))
-  (build-test-node3 (name-node recipe) (rmq-node-recipe/source-queue recipe)
-                    (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
-                    (node-recipe/batch-size recipe) (rmq-worker/host worker)
-                    (rmq-worker/username worker) (rmq-worker/password worker)))
-
-(transactional
-    (defclass testing-node4 (rmq-node) ()))
-
-(defclass test-recipe4 (rmq-node-recipe) ())
-
-(defun build-test-node4 (name source dest fail size host user pass)
-  (make-instance 'testing-node4 :name name :source source :dest dest :fail fail
-                                :batch-size size :type :test4
-                                :conn (setup-connection :host host
-                                                        :username user
-                                                        :password pass)))
-
-(defun build-test-recipe4 (source dest)
-  (make-instance 'test-recipe4 :source source :dest dest :type :test4))
-
-(defmethod transform-fn ((node testing-node4) item)
+(defmethod fn4 (item)
   (format nil "test ~a" item))
 
-(defmethod build-node ((worker rmq-worker) (recipe test-recipe4))
-  (build-test-node4 (name-node recipe) (rmq-node-recipe/source-queue recipe)
-                    (rmq-node-recipe/dest-queue recipe) (name-fail-queue recipe)
-                    (node-recipe/batch-size recipe) (rmq-worker/host worker)
-                    (rmq-worker/username worker) (rmq-worker/password worker)))
+(define-system
+    (:name test-node1 :fn #'fn1 :batch-size 10)
+    (:name test-node2 :fn #'fn2 :batch-size 10)
+  (:name test-node3 :fn #'fn3 :batch-size 10)
+  (:name test-node4 :fn #'fn4 :batch-size 10))
