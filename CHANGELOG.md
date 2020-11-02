@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and also builds the methods that support building and running nodes.
 - Built define system macro that takes a list of node info an constructs all classes
   and queues.
+- Recipes built by `define-system` are now automatically stored in the master server 
+  at start up.
 
 ## [0.2.0] - 2020-10-13
 ### Added

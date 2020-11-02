@@ -70,14 +70,12 @@
           (ok (member client clients :test #'string=)))
         (ok (= 3 (ghash-table-count (master-workers master)))))
 
-      (testing "add recipes"
-        (add-recipe master recipe1)
-        (add-recipe master recipe2)
-
-        (ok (= 2 (ghash-table-count (master-recipes master))))
+      (testing "recipes added"
+        (ok (= 3 (ghash-table-count (master-recipes master))))
         (iter:iterate
           (iter:for type-id in (ghash-keys (master-recipes master)))
-          (ok (member type-id '("TEST-NODE1" "TEST-NODE2") :test #'string=))))
+          (ok (member type-id '("TEST-NODE1" "TEST-NODE2" "TEST-NODE3")
+                      :test #'string=))))
 
       (let ((c1-reqs nil)
             (c2-reqs nil)
@@ -130,7 +128,7 @@
                   (sleep .1)
                   (test-clients-got-message "TEST-NODE2" recipe2)
                   (test-request-success client)
-                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
+                  (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE4"))
                   (adt:match mmop-c:received-mmop (mmop-c:pull-control-message client)
                     ((mmop-c:start-node-request-failure-v0 _)
                      (pass "request succeeded message"))
