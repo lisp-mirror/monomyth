@@ -1,9 +1,12 @@
 (defpackage monomyth/dsl
   (:use :cl :monomyth/rmq-node :stmx :monomyth/node :monomyth/rmq-node-recipe
-   :monomyth/rmq-worker :monomyth/worker :monomyth/node-recipe)
+   :monomyth/rmq-worker :monomyth/worker :monomyth/node-recipe :monomyth/master)
   (:import-from :alexandria with-gensyms)
-  (:export define-system define-rmq-node mashup-symbol build-queues))
+  (:export define-system define-rmq-node mashup-symbol build-queues *nodes*))
 (in-package :monomyth/dsl)
+
+(eval-when (:compile-toplevel)
+  (defvar *recipies* nil))
 
 (defparameter *start-name* 'start)
 (defparameter *end-name* 'end)
@@ -12,7 +15,8 @@
   "takes a bunch of symbols and combines them"
   (intern (format nil "~{~a~}" objects)))
 
-(defun define-rmq-node-internal (name transform-func source-queue dest-queue size name-key)
+(defun define-rmq-node-internal
+    (name transform-func source-queue dest-queue size name-key)
   "Internal function that creates the rmq node top level forms."
   `(let ((,name-key ,(intern (symbol-name name) "KEYWORD")))
      (transactional (defclass ,name (rmq-node) ()))
@@ -47,8 +51,8 @@
         (rmq-worker/username worker)
         (rmq-worker/password worker)))
 
-    (defmethod transform-fn ((node ,name) items)
-      (funcall ,transform-func items))))
+     (defmethod transform-fn ((node ,name) items)
+       (funcall ,transform-func items))))
 
 (defmacro define-rmq-node (name transform-func source-queue dest-queue size)
   "Defines all classes, methods, and functions for a new node type."
@@ -66,7 +70,8 @@
 
 (defmacro define-system (&rest nodes)
   "Takes a list of plist (:name :fn :batch-size) and turns them into rmq nodes
-that work in sequential order."
+that work in sequential order.
+All recipes are also set up to be loaded into master server via the add-recipes method."
   (let ((queues (build-queues nodes)))
     `(progn
        ,@(mapcar
@@ -74,4 +79,10 @@ that work in sequential order."
               (with-gensyms (name-key)
                 (define-rmq-node-internal (getf node :name) (getf node :fn) queue1
                   queue2 (getf node :batch-size) name-key)))
-          nodes queues (cdr queues)))))
+          nodes queues (cdr queues))
+
+       (defmethod add-recipes ((mstr master))
+         ,@(mapcar
+            #'(lambda (node)
+                `(add-recipe mstr (,(mashup-symbol 'build- (getf node :name) '-recipe))))
+            nodes)))))

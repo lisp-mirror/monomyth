@@ -23,7 +23,7 @@
                   :depends-on ("worker" "node" "rmq-node" "node-recipe" "rmq-node-recipe"))
                  (:file "master")
                  (:file "dsl"
-                  :depends-on ("node-recipe" "rmq-node-recipe" "node" "rmq-node" "worker" "rmq-worker")))))
+                  :depends-on ("node-recipe" "rmq-node-recipe" "node" "rmq-node" "worker" "rmq-worker" "master")))))
   :depends-on (:flexi-streams
                :cl-store
                :stmx

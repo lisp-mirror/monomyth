@@ -1,7 +1,9 @@
 (defpackage monomyth/master
   (:use :cl :stmx :stmx.util :monomyth/mmop :monomyth/node-recipe :trivia
         :monomyth/mmop-master :jonathan)
-  (:export start-master
+  (:export master
+           add-recipes
+           start-master
            stop-master
            master-workers
            master-recipes
@@ -41,6 +43,9 @@ and a table of node type symbols to node recipes"
        :transactional nil)
       (running t)))
 
+(defgeneric add-recipes (master)
+  (:documentation "add all recipes created by the define system macro"))
+
 (defun start-master (thread-count client-port)
   "starts up all worker threads and the router loop for load balancing"
   (v:info :master "starting master server with ~a threads listening for workers at port ~a"
@@ -51,6 +56,7 @@ and a table of node type symbols to node recipes"
              (iter:repeat thread-count)
              (iter:collect (start-handler-thread master)))))
     (start-router-loop master client-port thread-count thread-names)
+    (add-recipes master)
     master))
 
 (defun stop-master (master)

@@ -1,7 +1,7 @@
 (defpackage monomyth/tests/utils
   (:use :cl :monomyth/rmq-worker :monomyth/rmq-node-recipe :monomyth/rmq-node
         :monomyth/node :monomyth/worker :stmx :monomyth/node-recipe :rove
-        :monomyth/dsl)
+        :monomyth/dsl :monomyth/master)
   (:shadow :closer-mop)
   (:export
    *source-queue*

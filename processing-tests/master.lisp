@@ -80,11 +80,6 @@
     (format t "Ready to start tests?~%")
     (read-line)
 
-    (add-recipe master *recipe1*)
-    (add-recipe master *recipe2*)
-    (add-recipe master *recipe3*)
-    (add-recipe master *recipe4*)
-
     (pzmq:with-context nil
       (pzmq:with-socket control :dealer
         (pzmq:setsockopt control :identity *control-name*)
