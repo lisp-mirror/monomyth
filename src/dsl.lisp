@@ -2,11 +2,8 @@
   (:use :cl :monomyth/rmq-node :stmx :monomyth/node :monomyth/rmq-node-recipe
    :monomyth/rmq-worker :monomyth/worker :monomyth/node-recipe :monomyth/master)
   (:import-from :alexandria with-gensyms)
-  (:export define-system define-rmq-node mashup-symbol build-queues *nodes*))
+  (:export define-system define-rmq-node mashup-symbol build-queues))
 (in-package :monomyth/dsl)
-
-(eval-when (:compile-toplevel)
-  (defvar *recipies* nil))
 
 (defparameter *start-name* 'start)
 (defparameter *end-name* 'end)
