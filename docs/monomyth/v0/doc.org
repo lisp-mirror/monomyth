@@ -114,6 +114,24 @@ build a ZMQ client themselves.
 Currently, the control api can start nodes, stop workers, and request recipe
 information that includes how many nodes are running that recipe.
 
+* DSL
+Monomyth currently defines two macros that help build simple workflows.
+The first is ~define-rmq-node~, which is the only node macro at the moment because
+rabbit-mq is the only data stream supported.
+This macro takes the node name, transformation function, source and destination
+queues, and batch size.
+That information is then used to define the node and recipe classes, the class
+constructors, and fill out the methods used by the node and the work.
+
+The other macro is ~define-system~.
+At the moment this macro is very basic, and only takes a series of plists that
+contain a ~:name~, a ~:fn~, and a ~:batch-size~.
+The macro then constructs the queue names in a deterministic manor, and builds the
+nodes using those queues.
+Right now the nodes only work in a single, straight line.
+The macro then passes the recipe into a method used by the master server at start
+up to load those recipes in.
+
 * MMOP
 MMOP is a protocol designed to run on top of ZeroMQ used by master and worker servers.
 Each MMOP message is a multipart ZeroMQ Message requiring the collection of multiple frames.
