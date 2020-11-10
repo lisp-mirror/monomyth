@@ -1,6 +1,7 @@
 # Monomyth
 
-Monomyth is a distributed data processing system built using Common Lisp.
+Monomyth is a distributed data processing system built using Common Lisp and 
+based heavily on [Broadway]: https://hexdocs.pm/broadway/Broadway.html.
 It is designed to split the messaging systems into two, one defined and
 controlled by Monomyth, and one defined and controlled by the user.
 The messaging controlled by the user pertains only to data, which moves between
