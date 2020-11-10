@@ -14,6 +14,27 @@ user defined nodes to process the data and are controlled by a single master ser
 
 Design documentation can be found at `design/doc.org`.
 
+## Tests
+
+To run the tests you will need to have `roswell` and `qlot` installed, the tests 
+have been verified on SBCL 2.0.3.
+Then perform the following:
+```bash
+source test_env.sh
+docker-compose up -d
+qlot install
+qlot exec ./bin/test.ros
+```
+
+## Example
+
+The example right now is pretty arbitrary, both in set up and the computations
+involved.
+In one process start `qlot exec ./bin/example-master.ros`, and then in a few 
+others run `qlot exec ./bin/example-worker.ros`.
+Once all the workers have connected to the master (you will see log entries),
+press the return button in the first process.
+
 ## Status
 
 This project has its basic architecture set up, but lacks most of the functionality 
