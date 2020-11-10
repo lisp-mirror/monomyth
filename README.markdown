@@ -1,6 +1,7 @@
 # Monomyth
 
-Monomyth is a distributed data processing system built using Common Lisp.
+Monomyth is a distributed data processing system built using Common Lisp and 
+based heavily on [Broadway]: https://hexdocs.pm/broadway/Broadway.html.
 It is designed to split the messaging systems into two, one defined and
 controlled by Monomyth, and one defined and controlled by the user.
 The messaging controlled by the user pertains only to data, which moves between
@@ -13,6 +14,27 @@ The work itself is done on a group of distributed workers that use concurrent,
 user defined nodes to process the data and are controlled by a single master server.
 
 Design documentation can be found at `design/doc.org`.
+
+## Tests
+
+To run the tests you will need to have `roswell` and `qlot` installed, the tests 
+have been verified on SBCL 2.0.3.
+Then perform the following:
+```bash
+source test_env.sh
+docker-compose up -d
+qlot install
+qlot exec ./bin/test.ros
+```
+
+## Example
+
+The example right now is pretty arbitrary, both in set up and the computations
+involved.
+In one process start `qlot exec ./bin/example-master.ros`, and then in a few 
+others run `qlot exec ./bin/example-worker.ros`.
+Once all the workers have connected to the master (you will see log entries),
+press the return button in the first process.
 
 ## Status
 

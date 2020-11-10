@@ -79,30 +79,30 @@
   :description "Test system for monomyth"
   :perform (test-op (op c) (symbol-call :rove '#:run c)))
 
-(defsystem "monomyth/processing-tests-master"
+(defsystem "monomyth/example-master"
   :author "Paul Ricks"
   :license "MPL 2.0"
   :depends-on (:monomyth
                :rove)
-  :components ((:module "processing-tests"
+  :components ((:module "example"
                 :components
                 ((:file "utils")
                  (:file "master"
                   :depends-on ("utils")))))
-  :description "Test system for monomyth for modeling actual data processing,
+  :description "Example system for monomyth for modeling actual data processing,
 master perspective"
   :perform (test-op (op c) (symbol-call :rove '#:run c)))
 
-(defsystem "monomyth/processing-tests-worker"
+(defsystem "monomyth/example-worker"
   :author "Paul Ricks"
   :license "MPL 2.0"
   :depends-on (:monomyth
                :rove)
-  :components ((:module "processing-tests"
+  :components ((:module "example"
                 :components
                 ((:file "utils")
                  (:file "worker"
                   :depends-on ("utils")))))
-  :description "Test system for monomyth for modeling actual data processing,
+  :description "Example system for monomyth for modeling actual data processing,
 worker perspective"
   :perform (test-op (op c) (symbol-call :rove '#:run c)))
