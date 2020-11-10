@@ -1,5 +1,0 @@
-* Monomyth 
-
-** Usage
-
-** Installation
