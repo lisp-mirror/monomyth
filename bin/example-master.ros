@@ -1,0 +1,18 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+(progn ;;init forms
+  (ros:ensure-asdf)
+  #+quicklisp(ql:quickload '(:rove))
+  )
+
+(defpackage :ros.script.example-master.3814030909
+  (:use :cl))
+(in-package :ros.script.example-master.3814030909)
+
+(defun main (&rest argv)
+  (declare (ignorable argv))
+  (if (rove:run :monomyth/example-master) 0 1))
+;;; vim: set ft=lisp lisp:

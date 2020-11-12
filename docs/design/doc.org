@@ -9,7 +9,8 @@ The messaging controlled by the user pertains only to data, which moves between
 persisted data streams and node threads.
 The structure and manipulation of this data is largely defined by the user
 (though there are data stream specific aspects certain node types might handle).
-Monomyth itself handles all aspects of system orchestration via MMOP.
+Monomyth itself handles all aspects of system orchestration via the Monomyth
+Orchestration Protocol (MMOP).
 The work itself is done on a group of distributed workers that use concurrent,
 user defined nodes to process the data and are controlled by a single master server.
 
@@ -31,10 +32,10 @@ The server takes no other action other than this, nodes cannot by altered.
 It is assumed that there is a one to one ratio between servers and workers.
 
 Workers are controlled by a single master server.
-The master and workers communicate via the Monomyth Orchestration Protocol (MMOP).
+The master and workers communicate via MMOP.
 
 Finally, all operations are issued from a control service that turns REST requests
-into MMOP commands
+into MMOP commands.
 
 ** Data Stream
 The data streams are designed to be third party systems such as Kafka or RabbitMQ
