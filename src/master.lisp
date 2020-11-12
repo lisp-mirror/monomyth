@@ -1,5 +1,5 @@
 (defpackage monomyth/master
-  (:use :cl :stmx :stmx.util :monomyth/mmop :monomyth/node-recipe :trivia
+  (:use :cl :stmx :stmx.util :monomyth/mmop :monomyth/node-recipe
         :monomyth/mmop-master :jonathan)
   (:export master
            add-recipes

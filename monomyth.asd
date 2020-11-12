@@ -30,6 +30,7 @@
                :closer-mop
                :rutils
                :trivia
+               :optima
                :jonathan
                :fset
                :alexandria

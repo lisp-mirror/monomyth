@@ -65,7 +65,7 @@ into the correct adt"
 
 (defun translate-v0 (args)
   "attempts to translate the arg frames into MMOP/0 adts"
-  (let ((res (trivia:match args
+  (let ((res (optima:match args
                ((list "PONG") pong-v0)
                ((list "JSON-INF0-RESPONSE" json) (json-info-response-v0 json))
                ((list "START-NODE-REQUEST-SUCCESS") start-node-request-success-v0)
