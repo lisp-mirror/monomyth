@@ -23,7 +23,10 @@
                   :depends-on ("worker" "node" "rmq-node" "node-recipe" "rmq-node-recipe"))
                  (:file "master")
                  (:file "dsl"
-                  :depends-on ("node-recipe" "rmq-node-recipe" "node" "rmq-node" "worker" "rmq-worker" "master")))))
+                  :depends-on ("node-recipe" "rmq-node-recipe" "node" "rmq-node" "worker" "rmq-worker" "master"))))
+
+               (:module "src/control-api"
+                :components ((:file "main"))))
   :depends-on (:flexi-streams
                :cl-store
                :stmx
@@ -40,26 +43,16 @@
                :iterate
                :verbose
                :cl-rabbit
+               :lucerne
+               :woo
                :babel)
   :description "A distributed data processing library for CL"
   :in-order-to ((test-op (test-op "monomyth/tests"))))
-
-(defsystem "monomyth/control-api"
-  :version "0.3.1"
-  :author "Paul Ricks"
-  :license "MPL 2.0"
-  :depends-on (:monomyth
-               :lucerne
-               :woo)
-  :components ((:module "src/control-api"
-                :components ((:file "main"))))
-  :description "Control rest api for monomyth")
 
 (defsystem "monomyth/tests"
   :author "Paul Ricks"
   :license "MPL 2.0"
   :depends-on (:monomyth
-               :monomyth/control-api
                :rove
                :quri
                :dexador

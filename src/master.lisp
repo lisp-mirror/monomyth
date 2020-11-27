@@ -2,6 +2,7 @@
   (:use :cl :stmx :stmx.util :monomyth/mmop :monomyth/node-recipe
         :monomyth/mmop-master :jonathan)
   (:export master
+           *router-thread-name*
            add-recipes
            start-master
            stop-master
@@ -15,7 +16,6 @@
            ask-to-shutdown-worker))
 (in-package :monomyth/master)
 
-(setf *arity-check-by-test-call* nil)
 (defparameter *internal-conn-name* "inproc://mmop-master-routing")
 (defparameter *end-message* "END")
 (defparameter *router-thread-name* "monomyth-master-router")
