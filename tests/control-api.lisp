@@ -1,7 +1,8 @@
 (defpackage monomyth/tests/control-api
   (:use :cl :rove :monomyth/control-api/main :bordeaux-threads :monomyth/mmop
    :monomyth/master :jonathan :cl-rabbit :monomyth/tests/utils :rutils.misc
-        :monomyth/rmq-node :monomyth/rmq-worker :monomyth/worker))
+        :monomyth/rmq-node :monomyth/rmq-worker :monomyth/worker
+        :monomyth/dsl))
 (in-package :monomyth/tests/control-api)
 
 (v:output-here *terminal-io*)
@@ -10,6 +11,20 @@
 (defparameter *api-uri* (format nil "http://127.0.0.1:~a" *api-port*))
 (defparameter *master-port* 55555)
 (defparameter *master-uri* (format nil "tcp://127.0.0.1:~a" *master-port*))
+
+(defun fn1 (item)
+  (format nil "test1 ~a" item))
+
+(defun fn2 (item)
+  (format nil "test2 ~a" item))
+
+(defun fn3 (item)
+  (format nil "test3 ~a" item))
+
+(define-system
+    (:name test-node1 :fn #'fn1 :batch-size 5)
+    (:name test-node2 :fn #'fn2 :batch-size 10)
+    (:name test-node3 :fn #'fn3 :batch-size 4))
 
 (teardown
  (let ((conn (setup-connection :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))

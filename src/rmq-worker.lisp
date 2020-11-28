@@ -29,4 +29,5 @@
 
 (defun build-rmq-worker
     (&key (host "localhost") (port 5672) (username "guest") (password "guest"))
-  (make-instance 'rmq-worker :host host :port port :username username :password password))
+  (make-instance 'rmq-worker :host host :port port :username username
+                             :password password))

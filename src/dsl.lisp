@@ -21,28 +21,25 @@
      (defclass ,(mashup-symbol name '-recipe) (rmq-node-recipe) ())
 
      (defun ,(mashup-symbol 'build- name)
-         (name source dest fail type size host port user pass)
+         (name fail type host port user pass)
        (make-instance
         (quote ,name)
-        :name name :source source :dest dest :fail fail :type type :size size
+        :name name :source ,source-queue :fail fail :type type
+        :batch-size ,size
+        ,@(if dest-queue `(:dest ,dest-queue) '(:place-destination nil))
         :conn (setup-connection :host host :port port :username user
                                 :password pass)))
 
      (defun ,(mashup-symbol 'build- name '-recipe) ()
-       (make-instance
-        (quote ,(mashup-symbol name '-recipe))
-        :source ,source-queue :dest ,dest-queue :type ,name-key
-        :batch-size ,size))
+       (make-instance (quote ,(mashup-symbol name '-recipe))
+        :type ,name-key))
 
      (defmethod build-node
          ((worker rmq-worker) (recipe ,(mashup-symbol name '-recipe)))
        (,(mashup-symbol 'build- name)
         (name-node recipe)
-        (rmq-node-recipe/source-queue recipe)
-        (rmq-node-recipe/dest-queue recipe)
         (name-fail-queue recipe)
         (node-recipe/type recipe)
-        (node-recipe/batch-size recipe)
         (rmq-worker/host worker)
         (rmq-worker/port worker)
         (rmq-worker/username worker)

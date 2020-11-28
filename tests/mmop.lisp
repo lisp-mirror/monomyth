@@ -305,8 +305,7 @@
   (testing "start-node"
     (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
           (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
-          (recipe (make-instance 'rmq-node-recipe :dest "test-d" :source "test-s"
-                                                  :type :test :batch-size 7)))
+          (recipe (make-instance 'rmq-node-recipe :type :test)))
       (pzmq:with-context nil
         (pzmq:with-sockets ((server :router) (client :dealer))
           (pzmq:setsockopt server :identity server-name)
@@ -321,11 +320,7 @@
             ((mmop-w:start-node-v0 rtype got-res)
              (progn
                (ok (string= rtype "TEST"))
-               (ok (eq (node-recipe/type got-res) (node-recipe/type recipe)))
-               (ok (string= (rmq-node-recipe/source-queue got-res)
-                            (rmq-node-recipe/source-queue recipe)))
-               (ok (string= (rmq-node-recipe/dest-queue got-res)
-                            (rmq-node-recipe/dest-queue recipe)))))
+               (ok (eq (node-recipe/type got-res) (node-recipe/type recipe)))))
             (_ (fail "mmop message is of wrong type")))))))
 
   (testing "node-start-success"
