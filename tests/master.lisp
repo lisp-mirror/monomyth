@@ -1,15 +1,34 @@
 (defpackage monomyth/tests/master
   (:use :cl :rove :monomyth/master :monomyth/mmop :monomyth/rmq-node-recipe :stmx.util
         :monomyth/node-recipe :monomyth/worker :cl-rabbit :monomyth/rmq-node :monomyth/node
-   :monomyth/rmq-worker :stmx :monomyth/tests/utils)
+   :monomyth/rmq-worker :stmx :monomyth/tests/utils :monomyth/dsl)
   (:shadow :closer-mop))
 (in-package :monomyth/tests/master)
 
 (defparameter *test-process-time* 5)
 (v:output-here *terminal-io*)
 
+(defun fn1 (item)
+  (format nil "test1 ~a" item))
+
+(defun fn2 (item)
+  (format nil "test2 ~a" item))
+
+(defun fn3 (item)
+  (format nil "test3 ~a" item))
+
+(define-system
+    (:name test-node1 :fn #'fn1 :batch-size 5)
+    (:name test-node2 :fn #'fn2 :batch-size 10)
+    (:name test-node3 :fn #'fn3 :batch-size 4))
+
+(define-rmq-node final-work-node nil queue-4 queue-4 10)
+
+(define-rmq-node final-work-node1 nil queue-3 queue-3 10)
+
 (teardown
-  (let ((conn (setup-connection :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
+  (let ((conn (setup-connection :host *rmq-host* :username *rmq-user*
+                                :password *rmq-pass*)))
     (with-channel (conn 1)
       (queue-delete conn 1 *source-queue*)
       (queue-delete conn 1 *dest-queue*)
@@ -225,9 +244,9 @@
 (deftest process-data-rmq
   (testing "one worker - one node"
     (let ((work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *source-queue* *dest-queue* *dest-queue* :work 10 *rmq-host*
-                             *rmq-port* *rmq-user* *rmq-pass*))
+            (build-test-node
+             (format nil "worknode-~d" (get-universal-time))
+             *dest-queue* :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
@@ -265,9 +284,9 @@
         (stop-master master))
 
       (setf work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *dest-queue* *dest-queue* *dest-queue* :work 10 *rmq-host*
-                             *rmq-port* *rmq-user* *rmq-pass*))
+            (build-work-node
+             (format nil "worknode-~d" (get-universal-time))
+             *dest-queue* :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
       (startup work-node nil)
       (labels ((get-msg-w-restart ()
                  (handler-case (get-message work-node)
@@ -284,9 +303,9 @@
 
   (testing "one worker - two nodes"
     (let ((work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-1 queue-2 queue-3 :work 10 *rmq-host*
-                             *rmq-port* *rmq-user* *rmq-pass*))
+            (build-test-node
+             (format nil "worknode-~d" (get-universal-time))
+             queue-1 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
@@ -297,8 +316,6 @@
       (let* ((client-port 55555)
              (uri (format nil "tcp://localhost:~a" client-port))
              (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
-             (recipe1 (build-test-node1-recipe))
-             (recipe2 (build-test-node2-recipe))
              (master (start-master 2 client-port))
              (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
         (bt:make-thread #'(lambda ()
@@ -308,8 +325,6 @@
                             (pass "worker-stopped")))
 
         (sleep .1)
-        (add-recipe master recipe1)
-        (add-recipe master recipe2)
 
         (pzmq:with-context nil
           (pzmq:with-socket client :dealer
@@ -329,9 +344,9 @@
         (stop-master master))
 
       (setf work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-3 *dest-queue* *dest-queue* :test 10 *rmq-host*
-                             *rmq-port* *rmq-user* *rmq-pass*))
+            (build-final-work-node1
+             (format nil "worknode-~d" (get-universal-time))
+             queue-3 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
       (startup work-node nil)
       (labels ((get-msg-w-restart ()
                  (handler-case (get-message work-node)
@@ -348,9 +363,9 @@
 
   (testing "two workers"
     (let ((work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *source-queue* queue-1 *dest-queue* :work 10 *rmq-host*
-                             *rmq-port* *rmq-user* *rmq-pass*))
+            (build-test-node
+             (format nil "worknode-~d" (get-universal-time))
+             queue-1 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
@@ -361,9 +376,6 @@
       (let* ((client-port 55555)
              (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
              (uri (format nil "tcp://localhost:~a" client-port))
-             (recipe1 (build-test-node1-recipe))
-             (recipe2 (build-test-node2-recipe))
-             (recipe3 (build-test-node3-recipe))
              (master (start-master 2 client-port))
              (worker1 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
              (worker2 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
@@ -379,9 +391,6 @@
                             (pass "worker2-stopped")))
 
         (sleep .1)
-        (add-recipe master recipe1)
-        (add-recipe master recipe2)
-        (add-recipe master recipe3)
 
         (pzmq:with-context nil
           (pzmq:with-socket client :dealer
@@ -409,9 +418,9 @@
         (stop-master master))
 
       (setf work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-4 *dest-queue* *dest-queue* :work 10 *rmq-host*
-                             *rmq-port* *rmq-user* *rmq-pass*))
+            (build-final-work-node
+             (format nil "worknode-~d" (get-universal-time))
+             queue-4 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
       (startup work-node nil)
 
       (let ((results (iter:iterate
@@ -424,7 +433,7 @@
                        (sleep .1)
                        (get-msg-w-restart)))))
           (iter:iterate
-            (iter:for item in items)
+            (iter:repeat (length items))
             (iter:for got = (get-msg-w-restart))
             (ok (member (rmq-message-body got) results :test #'string=))
             (ack-message work-node got))

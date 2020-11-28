@@ -51,5 +51,4 @@ The features likely to be targeted for a 1.0 release:
 - Basic heartbeat and restart for workers.
 - Basic monitoring of workers and nodes, possibly data flow.
 - More fine grained control of node threads.
-- Startup CLI.
 - Possible (but very unlikely) Kafka support.

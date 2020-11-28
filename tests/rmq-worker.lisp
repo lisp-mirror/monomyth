@@ -1,7 +1,7 @@
 (defpackage monomyth/tests/rmq-worker
   (:use :cl :rove :cl-rabbit :monomyth/rmq-worker :monomyth/worker :monomyth/mmop
         :monomyth/rmq-node-recipe :monomyth/rmq-node :monomyth/node :stmx
-        :monomyth/node-recipe :monomyth/tests/utils)
+        :monomyth/node-recipe :monomyth/tests/utils :monomyth/dsl)
   (:shadow :closer-mop))
 (in-package :monomyth/tests/rmq-worker)
 
@@ -70,7 +70,7 @@
 (defclass test-bad-recipe (rmq-node-recipe) ())
 
 (defun build-bad-test-recipe ()
-  (make-instance 'test-bad-recipe :source "doesnt-matter" :dest "at-all" :type :test))
+  (make-instance 'test-bad-recipe :type :test))
 
 (deftest worker-catches-bad-recipe
   (let ((recipe (build-bad-test-recipe)))
@@ -99,14 +99,29 @@
       (stop-worker wrkr)
       (pass "worker stopped"))))
 
+(define-rmq-node final-work-node nil queue-4 queue-4 10)
+
+(defun fn1 (item)
+  (format nil "test1 ~a" item))
+
+(defun fn2 (item)
+  (format nil "test2 ~a" item))
+
+(defun fn3 (item)
+  (format nil "test3 ~a" item))
+
+(define-system
+    (:name test-node1 :fn #'fn1 :batch-size 5)
+    (:name test-node2 :fn #'fn2 :batch-size 10)
+    (:name test-node3 :fn #'fn3 :batch-size 4))
+
 (deftest worker-processes-data
   (testing "single node"
     (let ((recipe1 (build-test-node-recipe))
           (work-node
-            (build-test-node
+            (build-work-node
              (format nil "worknode-~d" (get-universal-time))
-             *dest-queue* *source-queue* *source-queue* :test 10 *rmq-host*
-             *rmq-port* *rmq-user* *rmq-pass*))
+             *source-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
@@ -138,10 +153,9 @@
         (pass "worker stopped"))
 
       (setf work-node
-            (build-test-node
+            (build-work-node
              (format nil "worknode-~d" (get-universal-time))
-             *dest-queue* *source-queue* *source-queue* :test 10 *rmq-host*
-             *rmq-port* *rmq-user* *rmq-pass*))
+             *source-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
       (startup work-node nil)
 
       (labels ((get-msg-w-restart ()
@@ -162,15 +176,16 @@
           (recipe2 (build-test-node2-recipe))
           (recipe3 (build-test-node3-recipe))
           (work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-1 queue-2 queue-3 :work 10 *rmq-host*
-                             *rmq-port* *rmq-user* *rmq-pass*))
+            (build-final-work-node
+             (format nil "worknode-~d" (get-universal-time))
+             queue-1 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
       (startup work-node nil)
       (iter:iterate
         (iter:for item in items)
         (send-message work-node queue-1 item))
       (shutdown work-node)
+
       (bt:make-thread
        #'(lambda ()
            (pzmq:with-context nil
@@ -215,9 +230,10 @@
         (stop-worker wrkr)
         (pass "worker stopped"))
 
-      (setf work-node (build-test-node (format nil "worknode-~d" (get-universal-time))
-                                       queue-4 queue-4 queue-4 :work 10 *rmq-host*
-                                       *rmq-port* *rmq-user* *rmq-pass*))
+      (setf work-node
+            (build-final-work-node
+             (format nil "worknode-~d" (get-universal-time))
+             queue-4 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
       (startup work-node nil)
       (labels ((get-msg-w-restart ()
                  (handler-case (get-message work-node)
