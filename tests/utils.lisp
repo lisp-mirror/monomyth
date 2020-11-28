@@ -40,11 +40,11 @@
 (defun fn (item)
   (format nil "test ~a" item))
 
-(define-rmq-node test-node #'fn *source-queue* *dest-queue* 1)
+(define-rmq-node test-node #'fn *source-queue* 1 :dest-queue *dest-queue*)
 
-(define-rmq-node large-test-node #'fn *source-queue* *dest-queue* 10)
+(define-rmq-node large-test-node #'fn *source-queue* 10 :dest-queue *dest-queue*)
 
-(define-rmq-node work-node nil *dest-queue* *source-queue* 10)
+(define-rmq-node work-node nil *dest-queue* 10 :dest-queue *source-queue*)
 
 (defun test-request-success (socket)
   (adt:match mmop-c:received-mmop (mmop-c:pull-control-message socket)

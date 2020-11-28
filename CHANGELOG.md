@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Nodes now support not placing item in a destination queue.
+
 ### Removed
 - RMQ node recipes no longer control destination and source queues, these are 
   no set in the dsl via the `build-node` functions.

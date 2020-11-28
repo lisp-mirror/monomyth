@@ -46,7 +46,6 @@ The features likely to be targeted for a 1.0 release:
 - DSL support for sending multiple nodes to a single queue.
 - DSL support filtering which message goes to which queue.
 - DSL support for iteration.
-- Support for nodes not sending messages anywhere at all (for loading nodes).
 - Support for nodes not picking messages off queue (for generators).
 - Basic heartbeat and restart for workers.
 - Basic monitoring of workers and nodes, possibly data flow.

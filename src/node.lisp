@@ -13,6 +13,7 @@
            node/node-name
            node/batch-size
            node/type
+           node/place-destination
            node-error
            node-error/step
            node-error/items))
@@ -106,9 +107,7 @@ should be :place, :transform, or :pull if handle failure will take it")
 (defun run-iteration (node)
   "runs an entire operation start to finish"
   (handler-case
-      (let ((res (transform-items node (pull-items node))))
-        (when (node/place-destination node)
-          (place-items node res)))
+      (place-items node (transform-items node (pull-items node)))
     (node-error (c)
       (let ((step (node-error/step c))
             (msg (node-error/message c)))

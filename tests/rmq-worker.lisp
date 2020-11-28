@@ -99,7 +99,7 @@
       (stop-worker wrkr)
       (pass "worker stopped"))))
 
-(define-rmq-node final-work-node nil queue-4 queue-4 10)
+(define-rmq-node final-work-node nil queue-4 10 :dest-queue queue-4)
 
 (defun fn1 (item)
   (format nil "test1 ~a" item))
@@ -110,7 +110,7 @@
 (defun fn3 (item)
   (format nil "test3 ~a" item))
 
-(define-system
+(define-system ()
     (:name test-node1 :fn #'fn1 :batch-size 5)
     (:name test-node2 :fn #'fn2 :batch-size 10)
     (:name test-node3 :fn #'fn3 :batch-size 4))
