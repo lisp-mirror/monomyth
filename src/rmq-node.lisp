@@ -33,7 +33,6 @@ Due to the library we are using, there will be one per node")
                      :reader rmq-node/source-queue)
        (dest-queue :initarg :dest
                    :transactional nil
-                   :initform (error "destination queue must be set")
                    :reader rmq-node/dest-queue)
        (fail-queue :initarg :fail
                    :transactional nil
@@ -59,7 +58,8 @@ Due to the library we are using, there will be one per node")
      (rabbitmq-library-error (c) (build-error-response ,step ,items c))))
 
 (defun setup-connection
-    (&key (host "localhost") (port 5672) (username "guest") (password "guest") (vhost "/"))
+    (&key (host "localhost") (port 5672) (username "guest") (password "guest")
+       (vhost "/"))
   "builds a new connection, sets up the socket, and logs in
 defaults are the local rabbit-mq defaults"
   (rabbit-mq-call

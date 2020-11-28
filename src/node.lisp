@@ -45,9 +45,6 @@ expects an explanation under :error in the result
 the step can be :pull, :transform, or :place
 the result is the full payload sent by the last step"))
 
-(defgeneric run-iteration (node)
-  (:documentation "runs an entire operation start to finish"))
-
 (defgeneric shutdown (node)
   (:documentation "graceful shutdown of the node"))
 
@@ -68,6 +65,12 @@ the result is the full payload sent by the last step"))
                    :transactional nil
                    :initform 10
                    :documentation "number of items to pull in pull-items at a time")
+       (place-destination
+        :reader node/place-destination
+        :initarg :place-destination
+        :transactional nil
+        :initform t
+        :documentation "whether or not to run the place-items method")
        (running :accessor node/running
                 :initform t
                 :documentation "transactional condition that allows for safe shutdown"))
@@ -100,9 +103,12 @@ should be :place, :transform, or :pull if handle failure will take it")
              :message (format nil "~a" c)))
     (:no-error (res) res)))
 
-(defmethod run-iteration ((node node))
+(defun run-iteration (node)
+  "runs an entire operation start to finish"
   (handler-case
-      (place-items node (transform-items node (pull-items node)))
+      (let ((res (transform-items node (pull-items node))))
+        (when (node/place-destination node)
+          (place-items node res)))
     (node-error (c)
       (let ((step (node-error/step c))
             (msg (node-error/message c)))
