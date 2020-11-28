@@ -48,25 +48,29 @@
      (defmethod transform-fn ((node ,name) items)
        (funcall ,transform-func items))))
 
-(defmacro define-rmq-node (name transform-func source-queue dest-queue size)
+(defmacro define-rmq-node
+    (name transform-func source-queue size &key dest-queue)
   "Defines all classes, methods, and functions for a new node type."
   (with-gensyms (keyword-sym)
     (define-rmq-node-internal name transform-func source-queue dest-queue
       size keyword-sym)))
 
-(defun build-queues (nodes)
+(defun build-queues (place-last nodes)
   "turns the linear list of edges into queue names"
   (mapcar #'(lambda (first-node second-node)
-              (format nil "~a-to-~a" (getf first-node :name)
-                      (getf second-node :name)))
+              (if (getf second-node :name)
+                  (format nil "~a-to-~a" (getf first-node :name)
+                          (getf second-node :name))
+                  nil))
           (cons `(:name ,*start-name*) nodes)
-          (append nodes `((:name ,*end-name*)))))
+          (append nodes `((:name ,(if place-last *end-name* nil))))))
 
-(defmacro define-system (&rest nodes)
+(defmacro define-system ((&key (place-last t)) &body nodes)
   "Takes a list of plist (:name :fn :batch-size) and turns them into rmq nodes
 that work in sequential order.
-All recipes are also set up to be loaded into master server via the add-recipes method."
-  (let ((queues (build-queues nodes)))
+All recipes are also set up to be loaded into master server via the add-recipes
+method."
+  (let ((queues (build-queues place-last nodes)))
     `(progn
        ,@(mapcar
           #'(lambda (node queue1 queue2)

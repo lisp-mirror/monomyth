@@ -247,6 +247,36 @@
 
     (skip "ack failure")))
 
+(deftest dont-place-items
+  (let* ((items `("1" "2" "3" "4" "5" "6" "7" "8" "9" "10"))
+         (i 0))
+    (flet ((check-fn (item)
+             (ok (string= item (nth i items)))
+             (incf i)))
+      (define-rmq-node no-place #'check-fn *source-queue* 10)
+      (let ((sending-node
+              (build-work-node
+               (format nil "test-rmq-node-1-~d" (get-universal-time))
+               *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
+            (pulling-node
+              (build-no-place "no place node" *fail-queue* :no-place
+                              *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
+        (startup pulling-node nil)
+        (startup sending-node nil)
+
+        (iter:iterate
+          (iter:for item in items)
+          (send-message sending-node *source-queue* item))
+        (sleep .1)
+
+        (run-iteration pulling-node)
+
+        (ng (pull-items pulling-node))
+        (ng (pull-items sending-node))
+
+        (shutdown pulling-node)
+        (shutdown sending-node)))))
+
 (defmacro test-handle-failure (step-name step)
   `(testing ,(format nil "~a send successful" step-name)
      (iter:iterate
@@ -267,7 +297,7 @@
            (ok (string= (rmq-message-body final-item) (rmq-message-body got-item)))
            (ack-message sending-node final-item))))))
 
-(define-rmq-node fail-work-node nil *fail-queue* *source-queue* 10)
+(define-rmq-node fail-work-node nil *fail-queue* 10 :dest-queue *source-queue*)
 
 (deftest handle-failure
   (let ((pulling-node
@@ -300,15 +330,15 @@
     (shutdown sending-node)))
 
 (deftest full-node-path-success
-  (let ((pulling-node
+  (let ((test-items '("1" "2" "3" "4" "5"))
+        (pulling-node
           (build-test-node
            (format nil "test-rmq-node-~d" (get-universal-time))
            *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
         (sending-node
           (build-work-node
            (format nil "test-rmq-node-1-~d" (get-universal-time))
-           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
-        (test-items '("1" "2" "3" "4" "5")))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
     (startup pulling-node nil)
     (startup sending-node nil)
 
@@ -410,7 +440,7 @@
 (defun fn1 (item)
   (format nil "test1 ~a" item))
 
-(define-system
+(define-system ()
     (:name full-test-node1 :fn #'fn :batch-size 1)
     (:name full-test-node2 :fn #'fn1 :batch-size 1))
 
@@ -418,7 +448,7 @@
 (defparameter *full-queue2* "FULL-TEST-NODE1-to-FULL-TEST-NODE2")
 (defparameter *full-queue3* "FULL-TEST-NODE2-to-END")
 
-(define-rmq-node final-work-node nil *full-queue3* *full-queue1* 5)
+(define-rmq-node final-work-node nil *full-queue3* 5 :dest-queue *full-queue1*)
 
 (deftest full-node-path-success-two-nodes
   (let ((pulling-node
