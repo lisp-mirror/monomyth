@@ -21,7 +21,7 @@
 (defun fn3 (item)
   (format nil "test3 ~a" item))
 
-(define-system
+(define-system ()
     (:name test-node1 :fn #'fn1 :batch-size 5)
     (:name test-node2 :fn #'fn2 :batch-size 10)
     (:name test-node3 :fn #'fn3 :batch-size 4))

@@ -32,6 +32,7 @@ Due to the library we are using, there will be one per node")
                      :initform (error "source queue must be set")
                      :reader rmq-node/source-queue)
        (dest-queue :initarg :dest
+                   :initform nil
                    :transactional nil
                    :reader rmq-node/dest-queue)
        (fail-queue :initarg :fail
@@ -79,8 +80,9 @@ also ensures all three queues are up and sets up basic consume for the source qu
      (channel-open (rmq-node/conn node) *channel*)
      (queue-declare (rmq-node/conn node) *channel*
                     :queue (rmq-node/source-queue node))
-     (queue-declare (rmq-node/conn node) *channel*
-                    :queue (rmq-node/dest-queue node))
+     (when (rmq-node/dest-queue node)
+       (queue-declare (rmq-node/conn node) *channel*
+                      :queue (rmq-node/dest-queue node)))
      (queue-declare (rmq-node/conn node) *channel*
                     :queue (rmq-node/fail-queue node))
      (basic-consume (rmq-node/conn node) *channel*
@@ -149,7 +151,8 @@ return :success t with the :result if things go well"
     (rabbit-mq-call
      :place
      (progn
-       (send-message node (rmq-node/dest-queue node) (rmq-message-body item))
+       (when (node/place-destination node)
+         (send-message node (rmq-node/dest-queue node) (rmq-message-body item)))
        (ack-message node item))
      (nthcdr i result))))
 
