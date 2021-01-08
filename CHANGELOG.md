@@ -6,11 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- Nodes now support not placing item in a destination queue.
+- Nodes now support not placing items in a destination queue.
+- Nodes now support not pulling items in a source queue queue.
 
 ### Removed
 - RMQ node recipes no longer control destination and source queues, these are 
-  no set in the dsl via the `build-node` functions.
+  now set in the dsl via the `build-node` functions.
 - Node recipes no longer control batch size, these are no set in the dsl via the 
   `build-node` functions.
 

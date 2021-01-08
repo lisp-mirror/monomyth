@@ -1,7 +1,9 @@
 (defpackage monomyth/node
   (:use :cl :uuid :stmx)
   (:shadow :closer-mop)
-  (:export startup
+  (:export *stub-message*
+           startup
+           build-stub-item
            pull-items
            transform-items
            transform-fn
@@ -14,10 +16,13 @@
            node/batch-size
            node/type
            node/place-destination
+           node/pull-source
            node-error
            node-error/step
            node-error/items))
 (in-package :monomyth/node)
+
+(defparameter *stub-message* "STUB-ITEM")
 
 (defgeneric startup (node &optional build-worker-thread)
   (:documentation "performs any initial start up to ensure the node is working as corrected.
@@ -72,6 +77,12 @@ the result is the full payload sent by the last step"))
         :transactional nil
         :initform t
         :documentation "whether or not to run the place-items method")
+       (pull-source
+        :reader node/pull-source
+        :initarg :pull-source
+        :transactional nil
+        :initform t
+        :documentation "whether or not to run the pull-items method")
        (running :accessor node/running
                 :initform t
                 :documentation "transactional condition that allows for safe shutdown"))
@@ -104,10 +115,25 @@ should be :place, :transform, or :pull if handle failure will take it")
              :message (format nil "~a" c)))
     (:no-error (res) res)))
 
+(defgeneric build-stub-item (node)
+  (:documentation "constructs a stub item message"))
+
+(defmethod build-stub-item ((node node))
+  *stub-message*)
+
+(defun build-stub-items (node)
+  "An alternative to pull-items when node/pull-source is nil.
+Produces a list of length node/batch-size filled with :stub-item keywords."
+  (iter:iterate
+    (iter:repeat (node/batch-size node))
+    (iter:collect (build-stub-item node))))
+
 (defun run-iteration (node)
   "runs an entire operation start to finish"
   (handler-case
-      (place-items node (transform-items node (pull-items node)))
+      (place-items node (transform-items node (if (node/pull-source node)
+                                                  (pull-items node)
+                                                  (build-stub-items node))))
     (node-error (c)
       (let ((step (node-error/step c))
             (msg (node-error/message c)))

@@ -2,6 +2,8 @@
   (:use :cl :monomyth/node :cl-rabbit :stmx)
   (:shadow :closer-mop)
   (:export rmq-node
+           rmq-node/source-queue
+           rmq-node/dest-queue
            setup-connection
            build-rmq-message
            rmq-message-body
@@ -29,7 +31,7 @@ Due to the library we are using, there will be one per node")
                  :reader rmq-node/exchange)
        (source-queue :initarg :source
                      :transactional nil
-                     :initform (error "source queue must be set")
+                     :initform nil
                      :reader rmq-node/source-queue)
        (dest-queue :initarg :dest
                    :initform nil
@@ -78,15 +80,17 @@ also ensures all three queues are up and sets up basic consume for the source qu
    :startup
    (progn
      (channel-open (rmq-node/conn node) *channel*)
-     (queue-declare (rmq-node/conn node) *channel*
-                    :queue (rmq-node/source-queue node))
+     (when (rmq-node/source-queue node)
+       (queue-declare (rmq-node/conn node) *channel*
+                      :queue (rmq-node/source-queue node)))
      (when (rmq-node/dest-queue node)
        (queue-declare (rmq-node/conn node) *channel*
                       :queue (rmq-node/dest-queue node)))
      (queue-declare (rmq-node/conn node) *channel*
                     :queue (rmq-node/fail-queue node))
-     (basic-consume (rmq-node/conn node) *channel*
-                    (rmq-node/source-queue node)))))
+     (when (rmq-node/source-queue node)
+       (basic-consume (rmq-node/conn node) *channel*
+                      (rmq-node/source-queue node))))))
 
 (defmethod shutdown ((node rmq-node))
   "closes the channel and then destroys the connections.
@@ -121,6 +125,9 @@ return :success t with the :result if things go well"
   (basic-nack (rmq-node/conn node) *channel*
               (rmq-message-delivery-tag message) :requeue requeue))
 
+(defmethod build-stub-item ((node rmq-node))
+  (build-rmq-message :body *stub-message*))
+
 (defmethod pull-items ((node rmq-node))
   (iter:iterate
     (iter:finally (return items))
@@ -153,7 +160,8 @@ return :success t with the :result if things go well"
      (progn
        (when (node/place-destination node)
          (send-message node (rmq-node/dest-queue node) (rmq-message-body item)))
-       (ack-message node item))
+       (when (rmq-message-delivery-tag item)
+         (ack-message node item)))
      (nthcdr i result))))
 
 (defmethod handle-failure ((node rmq-node) step result)

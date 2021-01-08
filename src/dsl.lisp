@@ -24,9 +24,9 @@
          (name fail type host port user pass)
        (make-instance
         (quote ,name)
-        :name name :source ,source-queue :fail fail :type type
-        :batch-size ,size
+        :name name :fail fail :type type :batch-size ,size
         ,@(if dest-queue `(:dest ,dest-queue) '(:place-destination nil))
+        ,@(if source-queue `(:source ,source-queue) '(:pull-source nil))
         :conn (setup-connection :host host :port port :username user
                                 :password pass)))
 
@@ -49,28 +49,30 @@
        (funcall ,transform-func item))))
 
 (defmacro define-rmq-node
-    (name transform-func source-queue size &key dest-queue)
+    (name transform-func size &key source-queue dest-queue)
   "Defines all classes, methods, and functions for a new node type."
   (with-gensyms (keyword-sym)
     (define-rmq-node-internal name transform-func source-queue dest-queue
       size keyword-sym)))
 
-(defun build-queues (place-last nodes)
+(defun build-queues (pull-first place-last nodes)
   "turns the linear list of edges into queue names"
   (mapcar #'(lambda (first-node second-node)
-              (if (getf second-node :name)
+              (if (and (getf first-node :name) (getf second-node :name))
                   (format nil "~a-to-~a" (getf first-node :name)
                           (getf second-node :name))
                   nil))
-          (cons `(:name ,*start-name*) nodes)
+          (cons `(:name ,(if pull-first *start-name* nil)) nodes)
           (append nodes `((:name ,(if place-last *end-name* nil))))))
 
-(defmacro define-system ((&key (place-last t)) &body nodes)
+(defmacro define-system ((&key (pull-first t) (place-last t)) &body nodes)
   "Takes a list of plist (:name :fn :batch-size) and turns them into rmq nodes
 that work in sequential order.
 All recipes are also set up to be loaded into master server via the add-recipes
-method."
-  (let ((queues (build-queues place-last nodes)))
+method.
+pull-first and place-last indicate if the first node should pull from a source queue
+and if the last node should place on a destination queue."
+  (let ((queues (build-queues pull-first place-last nodes)))
     `(progn
        ,@(mapcar
           #'(lambda (node queue1 queue2)
