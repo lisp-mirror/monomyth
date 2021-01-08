@@ -1,11 +1,11 @@
 (defpackage monomyth/tests/rmq-worker
   (:use :cl :rove :cl-rabbit :monomyth/rmq-worker :monomyth/worker :monomyth/mmop
         :monomyth/rmq-node-recipe :monomyth/rmq-node :monomyth/node :stmx
-        :monomyth/node-recipe :monomyth/tests/utils :monomyth/dsl)
+        :monomyth/node-recipe :monomyth/tests/utils :monomyth/dsl
+        :lparallel)
   (:shadow :closer-mop))
 (in-package :monomyth/tests/rmq-worker)
 
-(defparameter *test-process-time* 3)
 (v:output-here *terminal-io*)
 
 (teardown
@@ -122,54 +122,62 @@
             (build-work-node
              (format nil "worknode-~d" (get-universal-time))
              *source-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
-          (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
-      (startup work-node nil)
-      (iter:iterate
-        (iter:for item in items)
-        (send-message work-node *source-queue* item))
-      (shutdown work-node)
-      (bt:make-thread
-       #'(lambda ()
-           (pzmq:with-context nil
-             (pzmq:with-socket master :router
-               (pzmq:bind master "tcp://*:55555")
-               (adt:match mmop-m:received-mmop (mmop-m:pull-master-message master)
-                 ((mmop-m:worker-ready-v0 client-id)
-                  (send-msg master *mmop-v0*
-                            (mmop-m:start-node-v0 client-id recipe1))
-                  (adt:match mmop-m:received-mmop
-                    (mmop-m:pull-master-message master)
-                    ((mmop-m:start-node-success-v0 new-id msg)
-                     (ok (string= new-id client-id))
-                     (ok (string= msg "TEST-NODE")))
-                    (_ (fail "unexpected message type")))
-                  (sleep *test-process-time*)
-                  (send-msg master *mmop-v0* (mmop-m:shutdown-worker-v0 client-id)))
-                 (_ (fail "unexpected message type")))))))
-      (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
-        (start-worker wrkr "tcp://localhost:55555")
-        (run-worker wrkr)
-        (stop-worker wrkr)
-        (pass "worker stopped"))
+          (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed"))
+          (i 0)
+          (p (promise)))
+      (define-rmq-node checking-node
+          #'(lambda (item)
+              (ok (string= (format nil "test ~a" (nth i items)) item))
+              (incf i)
+              (when (= i (length items))
+                (fulfill p t)))
+        *dest-queue* 1)
 
-      (setf work-node
-            (build-work-node
-             (format nil "worknode-~d" (get-universal-time))
-             *source-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
-      (startup work-node nil)
+      (let ((check-node (build-checking-node
+                         "checker" *source-queue* :checker
+                         *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
 
-      (labels ((get-msg-w-restart ()
-                 (handler-case (get-message work-node)
-                   (rabbitmq-error (c)
-                     (declare (ignore c))
-                     (sleep .1)
-                     (get-msg-w-restart)))))
+        (startup work-node nil)
+        (startup check-node)
         (iter:iterate
           (iter:for item in items)
-          (iter:for got = (get-msg-w-restart))
-          (ok (string= (rmq-message-body got) (format nil "test ~a" item)))
-          (ack-message work-node got))
-        (shutdown work-node))))
+          (send-message work-node *source-queue* item))
+        (shutdown work-node)
+
+        (bt:make-thread
+         #'(lambda ()
+             (pzmq:with-context nil
+               (pzmq:with-socket master :router
+                 (pzmq:bind master "tcp://*:55555")
+                 (adt:match mmop-m:received-mmop (mmop-m:pull-master-message master)
+                   ((mmop-m:worker-ready-v0 client-id)
+                    (send-msg master *mmop-v0*
+                              (mmop-m:start-node-v0 client-id recipe1))
+                    (adt:match mmop-m:received-mmop
+                      (mmop-m:pull-master-message master)
+                      ((mmop-m:start-node-success-v0 new-id msg)
+                       (ok (string= new-id client-id))
+                       (ok (string= msg "TEST-NODE")))
+                      (_ (fail "unexpected message type")))
+                    (force p)
+                    (send-msg master *mmop-v0* (mmop-m:shutdown-worker-v0 client-id)))
+                   (_ (fail "unexpected message type")))))))
+
+        (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
+          (start-worker wrkr "tcp://localhost:55555")
+          (run-worker wrkr)
+          (stop-worker wrkr)
+          (pass "worker stopped"))
+
+        (setf work-node
+              (build-work-node
+               (format nil "worknode-~d" (get-universal-time))
+               *source-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
+        (startup work-node nil)
+        (ng (pull-items work-node))
+
+        (shutdown work-node)
+        (shutdown check-node))))
 
   (testing "multiple nodes"
     (let ((recipe1 (build-test-node1-recipe))
@@ -179,71 +187,79 @@
             (build-final-work-node
              (format nil "worknode-~d" (get-universal-time))
              queue-1 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
-          (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
-      (startup work-node nil)
-      (iter:iterate
-        (iter:for item in items)
-        (send-message work-node queue-1 item))
-      (shutdown work-node)
+          (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed"))
+          (i 0)
+          (p (promise)))
+      (define-rmq-node checking-node
+          #'(lambda (item)
+              (ok (string= (format nil "test3 test2 test1 ~a" (nth i items)) item))
+              (incf i)
+              (when (= i (length items))
+                (fulfill p t)))
+        queue-4 1)
 
-      (bt:make-thread
-       #'(lambda ()
-           (pzmq:with-context nil
-             (pzmq:with-socket master :router
-               (pzmq:bind master "tcp://*:55555")
-               (adt:match mmop-m:received-mmop (mmop-m:pull-master-message master)
-                 ((mmop-m:worker-ready-v0 client-id)
-
-                  (send-msg master *mmop-v0*
-                            (mmop-m:start-node-v0 client-id recipe1))
-                  (adt:match mmop-m:received-mmop
-                    (mmop-m:pull-master-message master)
-                    ((mmop-m:start-node-success-v0 new-id msg)
-                     (ok (string= new-id client-id))
-                     (ok (string= msg "TEST-NODE1")))
-                    (_ (fail "unexpected message type")))
-
-                  (send-msg master *mmop-v0*
-                            (mmop-m:start-node-v0 client-id recipe2))
-                  (adt:match mmop-m:received-mmop
-                    (mmop-m:pull-master-message master)
-                    ((mmop-m:start-node-success-v0 new-id msg)
-                     (ok (string= new-id client-id))
-                     (ok (string= msg "TEST-NODE2")))
-                    (_ (fail "unexpected message type")))
-
-                  (send-msg master *mmop-v0*
-                            (mmop-m:start-node-v0 client-id recipe3))
-                  (adt:match mmop-m:received-mmop
-                    (mmop-m:pull-master-message master)
-                    ((mmop-m:start-node-success-v0 new-id msg)
-                     (ok (string= new-id client-id))
-                     (ok (string= msg "TEST-NODE3")))
-                    (_ (fail "unexpected message type")))
-
-                  (sleep *test-process-time*)
-                  (send-msg master *mmop-v0* (mmop-m:shutdown-worker-v0 client-id)))
-                 (_ (fail "unexpected message type")))))))
-      (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
-        (start-worker wrkr "tcp://localhost:55555")
-        (run-worker wrkr)
-        (stop-worker wrkr)
-        (pass "worker stopped"))
-
-      (setf work-node
-            (build-final-work-node
-             (format nil "worknode-~d" (get-universal-time))
-             queue-4 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
-      (startup work-node nil)
-      (labels ((get-msg-w-restart ()
-                 (handler-case (get-message work-node)
-                   (rabbitmq-error (c)
-                     (declare (ignore c))
-                     (sleep .1)
-                     (get-msg-w-restart)))))
+      (let ((check-node (build-checking-node
+                         "checker" *source-queue* :checker
+                         *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
+        (startup work-node nil)
         (iter:iterate
           (iter:for item in items)
-          (iter:for got = (get-msg-w-restart))
-          (ok (string= (rmq-message-body got) (format nil "test3 test2 test1 ~a" item)))
-          (ack-message work-node got))
+          (send-message work-node queue-1 item))
+        (shutdown work-node)
+
+        (bt:make-thread
+         #'(lambda ()
+             (pzmq:with-context nil
+               (pzmq:with-socket master :router
+                 (pzmq:bind master "tcp://*:55555")
+                 (adt:match mmop-m:received-mmop (mmop-m:pull-master-message master)
+                   ((mmop-m:worker-ready-v0 client-id)
+
+                    (send-msg master *mmop-v0*
+                              (mmop-m:start-node-v0 client-id recipe1))
+                    (adt:match mmop-m:received-mmop
+                      (mmop-m:pull-master-message master)
+                      ((mmop-m:start-node-success-v0 new-id msg)
+                       (ok (string= new-id client-id))
+                       (ok (string= msg "TEST-NODE1")))
+                      (_ (fail "unexpected message type")))
+
+                    (send-msg master *mmop-v0*
+                              (mmop-m:start-node-v0 client-id recipe2))
+                    (adt:match mmop-m:received-mmop
+                      (mmop-m:pull-master-message master)
+                      ((mmop-m:start-node-success-v0 new-id msg)
+                       (ok (string= new-id client-id))
+                       (ok (string= msg "TEST-NODE2")))
+                      (_ (fail "unexpected message type")))
+
+                    (send-msg master *mmop-v0*
+                              (mmop-m:start-node-v0 client-id recipe3))
+                    (adt:match mmop-m:received-mmop
+                      (mmop-m:pull-master-message master)
+                      ((mmop-m:start-node-success-v0 new-id msg)
+                       (ok (string= new-id client-id))
+                       (ok (string= msg "TEST-NODE3")))
+                      (_ (fail "unexpected message type")))
+
+                    (force p)
+                    (send-msg master *mmop-v0* (mmop-m:shutdown-worker-v0 client-id)))
+                   (_ (fail "unexpected message type")))))))
+
+        (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                      :password *rmq-pass*)))
+          (startup check-node)
+          (start-worker wrkr "tcp://localhost:55555")
+          (run-worker wrkr)
+          (stop-worker wrkr)
+          (pass "worker stopped"))
+
+        (setf work-node
+              (build-final-work-node
+               (format nil "worknode-~d" (get-universal-time))
+               queue-4 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
+        (startup work-node nil)
+        (ng (pull-items work-node))
+
+        (shutdown check-node)
         (shutdown work-node)))))
