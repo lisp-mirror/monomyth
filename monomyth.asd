@@ -61,6 +61,8 @@
   :components ((:module "tests"
                 :components
                 ((:file "utils")
+                 (:file "dsl"
+                  :depends-on ("utils"))
                  (:file "rmq-node"
                   :depends-on ("utils"))
                  (:file "rmq-node-recipe")

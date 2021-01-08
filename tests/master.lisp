@@ -22,9 +22,9 @@
     (:name test-node2 :fn #'fn2 :batch-size 10)
     (:name test-node3 :fn #'fn3 :batch-size 4))
 
-(define-rmq-node final-work-node nil queue-4 10 :dest-queue queue-4)
+(define-rmq-node final-work-node nil 10 :source-queue queue-4 :dest-queue queue-4)
 
-(define-rmq-node final-work-node1 nil queue-3 10 :dest-queue queue-3)
+(define-rmq-node final-work-node1 nil 10 :source-queue queue-3 :dest-queue queue-3)
 
 (teardown
   (let ((conn (setup-connection :host *rmq-host* :username *rmq-user*
@@ -264,7 +264,7 @@
               (incf i)
               (when (= i (length items))
                 (fulfill p t)))
-        *dest-queue* 1)
+        1 :source-queue *dest-queue*)
 
       (startup work-node nil)
       (iter:iterate
@@ -330,7 +330,7 @@
               (incf i)
               (when (= i (length items))
                 (fulfill p t)))
-        queue-3 1)
+        1 :source-queue queue-3)
 
       (startup work-node nil)
       (iter:iterate
@@ -403,7 +403,7 @@
               (incf i)
               (when (= i (length items))
                 (fulfill p t)))
-        queue-4 1)
+        1 :source-queue queue-4)
 
       (startup work-node nil)
       (iter:iterate
