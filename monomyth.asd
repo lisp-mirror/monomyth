@@ -56,6 +56,7 @@
                :rove
                :quri
                :dexador
+               :lparallel
                :cl-mock)
   :components ((:module "tests"
                 :components

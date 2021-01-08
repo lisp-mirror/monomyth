@@ -45,8 +45,8 @@
         (rmq-worker/username worker)
         (rmq-worker/password worker)))
 
-     (defmethod transform-fn ((node ,name) items)
-       (funcall ,transform-func items))))
+     (defmethod transform-fn ((node ,name) item)
+       (funcall ,transform-func item))))
 
 (defmacro define-rmq-node
     (name transform-func source-queue size &key dest-queue)
