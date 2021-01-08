@@ -99,7 +99,7 @@
       (stop-worker wrkr)
       (pass "worker stopped"))))
 
-(define-rmq-node final-work-node nil queue-4 10 :dest-queue queue-4)
+(define-rmq-node final-work-node nil 10 :source-queue queue-4 :dest-queue queue-4)
 
 (defun fn1 (item)
   (format nil "test1 ~a" item))
@@ -131,7 +131,7 @@
               (incf i)
               (when (= i (length items))
                 (fulfill p t)))
-        *dest-queue* 1)
+        1 :source-queue *dest-queue*)
 
       (let ((check-node (build-checking-node
                          "checker" *source-queue* :checker
@@ -196,7 +196,7 @@
               (incf i)
               (when (= i (length items))
                 (fulfill p t)))
-        queue-4 1)
+        1 :source-queue queue-4)
 
       (let ((check-node (build-checking-node
                          "checker" *source-queue* :checker

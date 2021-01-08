@@ -131,6 +131,35 @@
     (shutdown pulling-node)
     (shutdown sending-node)))
 
+(define-rmq-node dont-pull-test #'identity 8 :dest-queue *dest-queue*)
+
+(deftest dont-pull-messages
+  (let ((sending-node
+          (build-dont-pull-test
+           (format nil "test-rmq-node-~d" (get-universal-time))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
+        (pulling-node
+          (build-work-node
+           (format nil "test-rmq-node-~d" (get-universal-time))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
+
+    (startup sending-node nil)
+    (startup pulling-node nil)
+
+    (run-iteration sending-node)
+
+    (sleep .1)
+
+    (let ((items (pull-items pulling-node)))
+      (ok (= (length items) (node/batch-size sending-node)))
+      (iter:iterate
+        (iter:for item in items)
+        (ok (string= "STUB-ITEM" (rmq-message-body item)))
+        (ack-message pulling-node item)))
+
+    (shutdown pulling-node)
+    (shutdown sending-node)))
+
 (deftest transform-items-success
   (let ((pulling-node
           (build-large-test-node
@@ -253,7 +282,7 @@
     (flet ((check-fn (item)
              (ok (string= item (nth i items)))
              (incf i)))
-      (define-rmq-node no-place #'check-fn *source-queue* 10)
+      (define-rmq-node no-place #'check-fn 10 :source-queue *source-queue*)
       (let ((sending-node
               (build-work-node
                (format nil "test-rmq-node-1-~d" (get-universal-time))
@@ -297,7 +326,7 @@
            (ok (string= (rmq-message-body final-item) (rmq-message-body got-item)))
            (ack-message sending-node final-item))))))
 
-(define-rmq-node fail-work-node nil *fail-queue* 10 :dest-queue *source-queue*)
+(define-rmq-node fail-work-node nil 10 :source-queue *fail-queue* :dest-queue *source-queue*)
 
 (deftest handle-failure
   (let ((pulling-node
@@ -448,7 +477,7 @@
 (defparameter *full-queue2* "FULL-TEST-NODE1-to-FULL-TEST-NODE2")
 (defparameter *full-queue3* "FULL-TEST-NODE2-to-END")
 
-(define-rmq-node final-work-node nil *full-queue3* 5 :dest-queue *full-queue1*)
+(define-rmq-node final-work-node nil 5 :source-queue *full-queue3* :dest-queue *full-queue1*)
 
 (deftest full-node-path-success-two-nodes
   (let ((pulling-node
