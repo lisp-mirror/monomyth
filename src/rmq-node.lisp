@@ -72,7 +72,7 @@ defaults are the local rabbit-mq defaults"
      (login-sasl-plain conn vhost username password)
      conn)))
 
-(defmethod startup ((node rmq-node) &optional build-worker-thread)
+(defmethod startup ((node rmq-node) context worker-address &optional build-worker-thread)
   "opens a channel using the nodes connections after setting up the socket.
 also ensures all three queues are up and sets up basic consume for the source queue"
   (declare (ignore build-worker-thread))
@@ -181,3 +181,6 @@ return :success t with the :result if things go well"
                            (rabbitmq-library-error/error-code c)
                            (rabbitmq-library-error/error-description c)))))))
       (error "unexpected step")))
+
+(defmethod complete-task :after ((node rmq-node))
+  (build-rmq-message))

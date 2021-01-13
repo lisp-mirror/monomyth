@@ -7,14 +7,18 @@
 (in-package :monomyth/tests/master)
 
 (v:output-here *terminal-io*)
+(defvar *test-context*)
 
-(defun fn1 (item)
+(defun fn1 (node item)
+  (declare (ignore node))
   (format nil "test1 ~a" item))
 
-(defun fn2 (item)
+(defun fn2 (node item)
+  (declare (ignore node))
   (format nil "test2 ~a" item))
 
-(defun fn3 (item)
+(defun fn3 (node item)
+  (declare (ignore node))
   (format nil "test3 ~a" item))
 
 (define-system ()
@@ -26,7 +30,11 @@
 
 (define-rmq-node final-work-node1 nil 10 :source-queue queue-3 :dest-queue queue-3)
 
+(setup
+  (setf *test-context* (pzmq:ctx-new)))
+
 (teardown
+  (pzmq:ctx-destroy *test-context*)
   (let ((conn (setup-connection :host *rmq-host* :username *rmq-user*
                                 :password *rmq-pass*)))
     (with-channel (conn 1)
@@ -259,14 +267,15 @@
                                      :password *rmq-pass*)))
 
       (define-rmq-node checking-node
-          #'(lambda (item)
+          #'(lambda (node item)
+              (declare (ignore node))
               (ok (string= (format nil "test ~a" (nth i items)) item))
               (incf i)
               (when (= i (length items))
                 (fulfill p t)))
         1 :source-queue *dest-queue*)
 
-      (startup work-node nil)
+      (startup work-node *test-context* "inproc://test" nil)
       (iter:iterate
         (iter:for item in items)
         (send-message work-node *source-queue* item))
@@ -283,7 +292,7 @@
 
         (sleep .1)
         (add-recipe master recipe1)
-        (startup check-node)
+        (startup check-node *test-context* "inproc://test")
 
         (pzmq:with-context nil
           (pzmq:with-socket client :dealer
@@ -304,7 +313,7 @@
             (build-work-node
              (format nil "worknode-~d" (get-universal-time))
              *dest-queue* :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
-      (startup work-node nil)
+      (startup work-node *test-context* "inproc://test" nil)
       (ng (pull-items work-node))
       (shutdown work-node)))
 
@@ -325,14 +334,15 @@
                                      :password *rmq-pass*)))
 
       (define-rmq-node checking-node
-          #'(lambda (item)
+          #'(lambda (node item)
+              (declare (ignore node))
               (ok (string= (format nil "test2 test1 ~a" (nth i items)) item))
               (incf i)
               (when (= i (length items))
                 (fulfill p t)))
         1 :source-queue queue-3)
 
-      (startup work-node nil)
+      (startup work-node *test-context* "inproc://test" nil)
       (iter:iterate
         (iter:for item in items)
         (send-message work-node queue-1 item))
@@ -348,7 +358,7 @@
                             (pass "worker-stopped")))
 
         (sleep .1)
-        (startup check-node)
+        (startup check-node *test-context* "inproc://test")
 
         (pzmq:with-context nil
           (pzmq:with-socket client :dealer
@@ -372,7 +382,7 @@
             (build-final-work-node1
              (format nil "worknode-~d" (get-universal-time))
              queue-3 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
-      (startup work-node nil)
+      (startup work-node *test-context* "inproc://test" nil)
       (ng (pull-items work-node))
       (shutdown work-node)))
 
@@ -398,14 +408,15 @@
            (p (promise)))
 
       (define-rmq-node checking-node
-          #'(lambda (item)
+          #'(lambda (node item)
+              (declare (ignore node))
               (ok (member item results :test #'string=))
               (incf i)
               (when (= i (length items))
                 (fulfill p t)))
         1 :source-queue queue-4)
 
-      (startup work-node nil)
+      (startup work-node *test-context* "inproc://test" nil)
       (iter:iterate
         (iter:for item in items)
         (send-message work-node queue-1 item))
@@ -426,7 +437,7 @@
                             (pass "worker2-stopped")))
 
         (sleep .1)
-        (startup check-node)
+        (startup check-node *test-context* "inproc://test")
 
         (pzmq:with-context nil
           (pzmq:with-socket client :dealer
@@ -458,6 +469,6 @@
             (build-final-work-node
              (format nil "worknode-~d" (get-universal-time))
              queue-4 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
-      (startup work-node nil)
+      (startup work-node *test-context* "inproc://test" nil)
       (ng (pull-items work-node))
       (shutdown work-node))))
