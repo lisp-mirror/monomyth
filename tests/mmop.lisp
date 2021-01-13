@@ -69,7 +69,62 @@
           (send-msg-frames server "mmop/test" `(,client-name "test"))
           (ok (equal (pull-msg client) test-frames)))))))
 
+(deftest to-pull
+  (let ((test-frames '("1" "2" "3")))
+    (testing "single message"
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :pull) (client :push))
+          (pzmq:bind server "inproc://test")
+          (pzmq:connect client "inproc://test")
+
+          (send-msg-frames client "mmop/test" test-frames)
+          (ok (equal test-frames (pull-msg server))))))
+
+    (testing "double messages"
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :pull) (client :push))
+          (pzmq:bind server "inproc://test")
+          (pzmq:connect client "inproc://test")
+
+          (send-msg-frames client "mmop/test" test-frames)
+          (send-msg-frames client "mmop/test" '("test"))
+          (ok (equal test-frames (pull-msg server))))))))
+
 (deftest MMOP/0
+  (testing "node-task-completed"
+    (let ((test-type "type-a")
+          (test-name "bob"))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :pull) (client :push))
+          (pzmq:bind server "inproc://test")
+          (pzmq:connect client "inproc://test")
+
+          (send-msg client *mmop-v0* (mmop-n:node-task-completed-v0 test-type test-name))
+          (adt:match mmop-w:received-mmop (mmop-w:pull-worker-message server)
+            ((mmop-w:node-task-completed-v0 node-type node-name)
+             (ok (string= node-type test-type))
+             (ok (string= node-name test-name)))
+            (_ (fail "unexpected message type")))))))
+
+  (testing "worker-task-completed"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
+          (test-worker "test-work")
+          (test-type "test-type"))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (client :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
+
+          (send-msg client *mmop-v0* (mmop-w:worker-task-completed-v0 test-worker test-type))
+          (adt:match mmop-m:received-mmop (mmop-m:pull-master-message server)
+            ((mmop-m:worker-task-completed-v0 worker-id node-type)
+             (ok (string= worker-id test-worker))
+             (ok (string= node-type test-type)))
+            (_ (fail "mmop message is of wrong type")))))))
+  
   (testing "ping"
     (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
           (server-name (format nil "server-~a" (uuid:make-v4-uuid))))

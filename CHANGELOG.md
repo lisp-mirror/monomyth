@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Nodes now support not placing items in a destination queue.
-- Nodes now support not pulling items in a source queue queue.
+- Nodes now support not pulling items in a source queue.
+- Nodes now support completing a bounded stream.
+
+### Changed
+- Node shutdown now attempts to kill the worker thread.
 
 ### Removed
 - RMQ node recipes no longer control destination and source queues, these are 

@@ -12,13 +12,16 @@
 (defparameter *master-port* 55555)
 (defparameter *master-uri* (format nil "tcp://127.0.0.1:~a" *master-port*))
 
-(defun fn1 (item)
+(defun fn1 (node item)
+  (declare (ignore node))
   (format nil "test1 ~a" item))
 
-(defun fn2 (item)
+(defun fn2 (node item)
+  (declare (ignore node))
   (format nil "test2 ~a" item))
 
-(defun fn3 (item)
+(defun fn3 (node item)
+  (declare (ignore node))
   (format nil "test3 ~a" item))
 
 (define-system ()
@@ -27,16 +30,16 @@
     (:name test-node3 :fn #'fn3 :batch-size 4))
 
 (teardown
- (let ((conn (setup-connection :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
-   (with-channel (conn 1)
-     (queue-delete conn 1 "TEST-NODE1-fail")
-     (queue-delete conn 1 "TEST-NODE2-fail")
-     (queue-delete conn 1 "TEST-NODE3-fail")
-     (queue-delete conn 1 queue-1)
-     (queue-delete conn 1 queue-2)
-     (queue-delete conn 1 queue-3)
-     (queue-delete conn 1 queue-4))
-   (destroy-connection conn)))
+  (let ((conn (setup-connection :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
+    (with-channel (conn 1)
+      (queue-delete conn 1 "TEST-NODE1-fail")
+      (queue-delete conn 1 "TEST-NODE2-fail")
+      (queue-delete conn 1 "TEST-NODE3-fail")
+      (queue-delete conn 1 queue-1)
+      (queue-delete conn 1 queue-2)
+      (queue-delete conn 1 queue-3)
+      (queue-delete conn 1 queue-4))
+    (destroy-connection conn)))
 
 (deftest startup
   (let ((master (start-master 2 *master-port*)))

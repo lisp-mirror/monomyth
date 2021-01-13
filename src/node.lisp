@@ -1,5 +1,5 @@
 (defpackage monomyth/node
-  (:use :cl :uuid :stmx)
+  (:use :cl :uuid :stmx :monomyth/mmop :monomyth/mmop-node)
   (:shadow :closer-mop)
   (:export *stub-message*
            startup
@@ -11,6 +11,7 @@
            handle-failure
            run-iteration
            shutdown
+           complete-task
            node
            node/node-name
            node/batch-size
@@ -19,14 +20,17 @@
            node/pull-source
            node-error
            node-error/step
-           node-error/items))
+           node-error/items
+           task-complete
+           task-complete/node-name))
 (in-package :monomyth/node)
 
 (defparameter *stub-message* "STUB-ITEM")
 
-(defgeneric startup (node &optional build-worker-thread)
+(defgeneric startup (node context worker-address &optional build-worker-thread)
   (:documentation "performs any initial start up to ensure the node is working as corrected.
-The build worker thread option exists for testing purposes"))
+The context is used to make a local 
+The build worker thread option exists for testing purposes."))
 
 (defgeneric pull-items (node)
   (:documentation "tells the node to pull count items from the message bus
@@ -41,7 +45,7 @@ and applies the transform function to each one"))
 
 (defgeneric place-items (node result)
   (:documentation "places the finished items on the message bus
-takes the entire payload sent by transorm
+takes the entire payload sent by transform
 assumes that the items are passed under :items
 should return a plist with one of the slots as :success"))
 
@@ -52,7 +56,13 @@ the step can be :pull, :transform, or :place
 the result is the full payload sent by the last step"))
 
 (defgeneric shutdown (node)
-  (:documentation "graceful shutdown of the node"))
+  (:documentation "Graceful shutdown of the node.
+Cannot be called within the node as it kills the thread, assumes that
+the thread name is the node name."))
+
+(defgeneric complete-task (node)
+  (:documentation "The node signals that it has completed its task and then
+stops the thread."))
 
 (transactional
     (defclass node ()
@@ -71,6 +81,8 @@ the result is the full payload sent by the last step"))
                    :transactional nil
                    :initform 10
                    :documentation "number of items to pull in pull-items at a time")
+       (socket :accessor node/socket
+               :documentation "ZMQ socket to allow for communication to the worker thread.")
        (place-destination
         :reader node/place-destination
         :initarg :place-destination
@@ -105,14 +117,23 @@ should be :place, :transform, or :pull if handle failure will take it")
   (:report (lambda (con stream)
              (format stream "internal node error: ~a" (node-error/message con)))))
 
+(define-condition task-complete (condition)
+  ((node-name :reader task-complete/node-name
+              :initarg :name
+              :initform (error "node name must be set")))
+  (:documentation "signals that the bounded stream has finished")
+  (:report (lambda (con stream)
+             (format stream "~a completed task"
+                     (task-complete/node-name con)))))
+
 (defmethod transform-items ((node node) pulled)
   (handler-case
       (iter:iterate
         (iter:for item in pulled)
-        (iter:collect (transform-fn item)))
+        (iter:collect (transform-fn node item)))
     (error (c)
       (error 'node-error :step :transform :items pulled
-             :message (format nil "~a" c)))
+                         :message (format nil "~a" c)))
     (:no-error (res) res)))
 
 (defgeneric build-stub-item (node)
@@ -140,7 +161,10 @@ Produces a list of length node/batch-size filled with :stub-item keywords."
         (v:error :node.event-loop "unexpected node error in ~a: ~a" step msg)
         (handle-failure node step (node-error/items c))))))
 
-(defmethod startup :after ((node node) &optional (build-worker-thread t))
+(defmethod startup :after ((node node) context worker-address &optional (build-worker-thread t))
+  (setf (node/socket node) (pzmq:socket context :push))
+  (pzmq:setsockopt (node/socket node) :identity (node/node-name node))
+  (pzmq:connect (node/socket node) worker-address)
   (when build-worker-thread
     (v:info :node "starting thread for ~a" (node/node-name node))
     (bt:make-thread
@@ -149,8 +173,22 @@ Produces a list of length node/batch-size filled with :stub-item keywords."
            (iter:while (node/running node))
            (run-iteration node)
            (sleep .1)))
-     :name (format nil "~a-thread" (node/node-name node)))))
+     :name (format nil (node/node-name node)))))
 
 (defmethod shutdown :before ((node node))
   (finish-output)
+  (pzmq:close (node/socket node))
   (atomic (setf (node/running node) nil)))
+
+(defmethod shutdown :after ((node node))
+  (let ((node-thread
+          (car
+           (remove-if-not
+            #'(lambda (th) (string= (bt:thread-name th) (node/node-name node)))
+            (bt:all-threads)))))
+    (when node-thread (bt:destroy-thread node-thread))))
+
+(defmethod complete-task ((node node))
+  (send-msg (node/socket node) *mmop-v0*
+            (node-task-completed-v0
+             (string (node/type node)) (node/node-name node))))

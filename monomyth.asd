@@ -6,6 +6,8 @@
                 :components
                 ((:file "node-recipe")
                  (:file "mmop")
+                 (:file "mmop-node"
+                  :components ("mmop"))
                  (:file "mmop-worker"
                   :components ("mmop" "node-recipe"))
                  (:file "mmop-master"
