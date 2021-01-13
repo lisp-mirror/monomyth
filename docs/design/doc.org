@@ -82,16 +82,20 @@ requiring far less work from the user or Monomyth's part to ensure that each
 piece of data is at least processed.
 
 ** Nodes (Worker Threads)
-All the core work is done on worker threads, persist threads that continuously
-poll data streams, transform the items, and then place the items back on the
-data stream for a new node to pick up.
+All the core work is done on worker threads, persistent threads that
+continuously poll data streams, transform the items, and then place the items
+back on the data stream for a new node to pick up.
 These nodes are responsible for all data specific logic, including acks/nacks
 and how to handle failure.
+
+Nodes also support completing tasks or bounded streams where the node declares
+the task complete and informs the worker, which shuts down the node.
 
 ** Worker Servers
 Worker servers exist to create and manage their threads and little else.
 
-They interact with the masters over MMOP, specifically with a dealer socket.
+They interact with the masters and hear from nodes over MMOP, specifically with
+a dealer socket and pull socket respecfully.
 
 A quick note on connections to the data streams.
 Currently, the ~rmq-node~ has one RabbitMQ connection per thread (as a result
@@ -119,8 +123,8 @@ information that includes how many nodes are running that recipe.
 Monomyth currently defines two macros that help build simple workflows.
 The first is ~define-rmq-node~, which is the only node macro at the moment because
 rabbit-mq is the only data stream supported.
-This macro takes the node name, transformation function, source and destination
-queues, and batch size.
+This macro takes the node name, transformation function, batch-size, and optional
+source and destination queues.
 That information is then used to define the node and recipe classes, the class
 constructors, and fill out the methods used by the node and the work.
 
@@ -129,7 +133,8 @@ At the moment this macro is very basic, and only takes a series of plists that
 contain a ~:name~, a ~:fn~, and a ~:batch-size~.
 The macro then constructs the queue names in a deterministic manor, and builds the
 nodes using those queues.
-Right now the nodes only work in a single, straight line.
+Right now the nodes only work in a single, straight line, with optional support for
+not pulling from the first data stream and not placing anything on the last.
 The macro then passes the recipe into a method used by the master server at start
 up to load those recipes in.
 
@@ -138,12 +143,15 @@ MMOP is a protocol designed to run on top of ZeroMQ used by master and worker se
 Each MMOP message is a multipart ZeroMQ Message requiring the collection of multiple frames.
 
 ** Sockets
-Currently, the set up is that each worker has a dealer socket and the master
-uses routing socket that then routs all of the messages out to internal threads
-that parse and act on them.
+Currently, the set up is that each worker and control API has a dealer socket
+and the master uses routing socket that then routs all of the messages out to
+internal threads that parse and act on them.
 This allows for full async communication.
 Note, to make this work, the master server must receive a full message from the
 workers before then communicating with them.
+
+The workers themselves have a second pull socket and their nodes all have a push
+socket, allowing the nodes to update the worker on their status.
 
 ** Versioning
 The first MMOP frame (that is the first non-routing frame) is the MMOP version,
@@ -153,7 +161,7 @@ Version 0 makes no promises as to backwards compatibility.
 
 ** Common Frames
 All Messages have a few base frames that are sent the before all messages.
-The first frame for all worker messages is the MMOP version.
+The first frame for all worker and node messages is the MMOP version.
 The first frame for all master messages is the client identity and the second
 is the MMOP version.
 
@@ -317,3 +325,26 @@ Results in no return message (right now).
 
 Frames:
 1. ~SHUTDOWN~
+
+*** Node Task Completed [node-task-completed]
+
+The node-task-completed message indicates that a node has completed a bounded
+stream.
+The node should be terminated, and a worker-task-completed message sent to
+the master server.
+
+Frames:
+1. ~NODE-TASK-COMPLETE~
+2. ~<node-type>~
+3. ~<node-id>~
+
+*** Worker Task Completed
+
+The worker-task-completed message indicates that a worker has completed a bounded
+stream.
+The respective type counts for the worker should be adjusted.
+
+Frames:
+1. ~WORKER-TASK-COMPLETED~
+2. ~<worker-id>~
+3. ~<node-type>~

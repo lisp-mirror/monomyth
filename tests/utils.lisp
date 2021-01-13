@@ -14,6 +14,7 @@
    *rmq-port*
    *rmq-user*
    *rmq-pass*
+   identity-fn
    test-node
    large-test-node
    work-node
@@ -37,7 +38,12 @@
 (defparameter queue-3 "TEST-NODE2-to-TEST-NODE3")
 (defparameter queue-4 "TEST-NODE3-to-END")
 
-(defun fn (item)
+(defun identity-fn (node item)
+  (declare (ignore node))
+  item)
+
+(defun fn (node item)
+  (declare (ignore node))
   (format nil "test ~a" item))
 
 (define-rmq-node test-node #'fn 1 :source-queue *source-queue* :dest-queue *dest-queue*)
