@@ -23,7 +23,11 @@ it should be okay start a node"))
   (:documentation "stops the worker processes and frees all resources and connections"))
 
 (defclass worker ()
-  ((context :reader worker/context
+  ((nodes-socket-address
+    :reader worker/nodes-socket-address
+    :initform (format nil "~a-~a" *node-socket-address* (make-v4-uuid))
+    :documentation "stores a unique node socket address")
+   (context :reader worker/context
             :initform (pzmq:ctx-new)
             :documentation "the zmq context used for the MMOP")
    (master-socket :accessor worker/master-socket
@@ -51,7 +55,7 @@ it should be okay start a node"))
         (worker/nodes-socket worker) (pzmq:socket (worker/context worker) :pull))
   (pzmq:setsockopt (worker/nodes-socket worker) :identity (worker/name worker))
   (pzmq:setsockopt (worker/master-socket worker) :identity (worker/name worker))
-  (pzmq:bind (worker/nodes-socket worker) *node-socket-address*)
+  (pzmq:bind (worker/nodes-socket worker) (worker/nodes-socket-address worker))
   (pzmq:connect (worker/master-socket worker) master-address)
   (send-msg (worker/master-socket worker) (worker/mmop-version worker) mmop-w:worker-ready-v0))
 
@@ -87,7 +91,7 @@ it should be okay start a node"))
      (shutdown (gethash node-name (worker/nodes worker)))
      (remhash node-name (worker/nodes worker))
      (send-msg (worker/master-socket worker) *mmop-v0*
-               (worker-task-completed-v0 (worker/name worker) node-type)))))
+               (worker-task-completed-v0 node-type)))))
 
 (defun start-worker-node (worker node-type recipe)
   "Attempts to start a node and communicate the result to the master server."
@@ -99,7 +103,7 @@ it should be okay start a node"))
                  node-type "recipe build" "worker cannot handle recipe type")))
        
     (:no-error (res)
-      (startup res (worker/context worker) *node-socket-address*)
+      (startup res (worker/context worker) (worker/nodes-socket-address worker))
       (let ((name (node/node-name res)))
         (setf (gethash name (worker/nodes worker)) res)
         (send-msg (worker/master-socket worker) (worker/mmop-version worker)
