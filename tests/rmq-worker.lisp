@@ -215,6 +215,7 @@
         (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
           (start-worker wrkr "tcp://localhost:55555")
           (run-worker wrkr)
+          (sleep .1)
           (stop-worker wrkr)
           (pass "worker stopped"))
 
@@ -301,6 +302,7 @@
           (startup check-node *test-context* "inproc://test")
           (start-worker wrkr "tcp://localhost:55555")
           (run-worker wrkr)
+          (sleep .1)
           (stop-worker wrkr)
           (pass "worker stopped"))
 

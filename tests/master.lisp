@@ -183,7 +183,31 @@
             (test-resonses master client2-name c2-expected-results)
             (test-resonses master client3-name c3-expected-results)))
 
-        (testing "stop-worker"
+        (testing "task complete"
+          (iter:iterate
+            (iter:for name in (find-active-workers master))
+            (iter:for client in (get-socket name `(,client1 ,client2 ,client3)))
+            (test-task-complete master client name)))
+        
+        (testing "task complete-failed"
+          (flet ((get-count ()
+                   (atomic
+                    (get-ghash (worker-info-type-counts
+                                (get-ghash (master-workers master) client3-name))
+                               "TEST-NODE4" 0))))
+            (let ((old-count (get-count)))
+              (send-msg client1 *mmop-v0*
+                        (mmop-w:worker-task-completed-v0 "TEST-NODE4"))
+              (sleep .1)
+
+              (ok (= old-count (get-count)))
+              (ok (zerop
+                   (atomic
+                    (get-ghash (worker-info-tasks-completed
+                                (get-ghash (master-workers master) client1-name))
+                               "TEST-NODE4" 0)))))))
+        
+        (testing "stop worker"
           (pzmq:with-context nil
             (pzmq:with-socket client :dealer
               (pzmq:setsockopt client :identity client-name)
@@ -206,6 +230,37 @@
                 (_ (fail "unexpected message type"))))))))
 
     (stop-master master)))
+
+(defun get-socket (sockets name)
+  (find-if
+   #'(lambda (val) (string= name (pzmq:getsockopt val :identity)))
+   sockets))
+
+(defun test-task-complete (master client name)
+  (flet ((get-count ()
+           (atomic
+            (get-ghash (worker-info-type-counts
+                        (get-ghash (master-workers master) name))
+                       "TEST-NODE1"))))
+    (let ((old-count (get-count)))
+      (send-msg client *mmop-v0*
+                (mmop-w:worker-task-completed-v0 "TEST-NODE1"))
+      (sleep .1)
+
+      (ok (= (1- old-count) (get-count)))
+      (ok (= 1 (atomic
+                (get-ghash (worker-info-tasks-completed
+                            (get-ghash (master-workers master) name))
+                           "TEST-NODE1")))))))
+
+(defun find-active-workers (master)
+  (remove-if
+   #'(lambda (val)
+       (zerop (atomic (get-ghash
+                       (worker-info-type-counts
+                        (get-ghash (master-workers master) val))
+                       "TEST-NODE1" 0))))
+   (atomic (ghash-keys (master-workers master)))))
 
 (defun test-client-recieves-start-node (socket type-id recipe)
   (adt:match mmop-w:received-mmop (mmop-w:pull-worker-message socket)
@@ -287,6 +342,7 @@
         (bt:make-thread #'(lambda ()
                             (start-worker worker uri)
                             (run-worker worker)
+                            (sleep .1)
                             (stop-worker worker)
                             (pass "worker-stopped")))
 
@@ -354,6 +410,7 @@
         (bt:make-thread #'(lambda ()
                             (start-worker worker uri)
                             (run-worker worker)
+                            (sleep .1)
                             (stop-worker worker)
                             (pass "worker-stopped")))
 
@@ -428,11 +485,13 @@
         (bt:make-thread #'(lambda ()
                             (start-worker worker1 uri)
                             (run-worker worker1)
+                            (sleep .1)
                             (stop-worker worker1)
                             (pass "worker1-stopped")))
         (bt:make-thread #'(lambda ()
                             (start-worker worker2 uri)
                             (run-worker worker2)
+                            (sleep .1)
                             (stop-worker worker2)
                             (pass "worker2-stopped")))
 

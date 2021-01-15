@@ -346,5 +346,4 @@ The respective type counts for the worker should be adjusted.
 
 Frames:
 1. ~WORKER-TASK-COMPLETED~
-2. ~<worker-id>~
-3. ~<node-type>~
+2. ~<node-type>~

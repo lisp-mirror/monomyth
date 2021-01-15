@@ -11,6 +11,7 @@
            master-context
            worker-info-type-counts
            worker-info-outstanding-request-counts
+           worker-info-tasks-completed
            add-recipe
            ask-to-start-node
            ask-to-shutdown-worker))
@@ -23,10 +24,13 @@
 (defparameter *shutdown-pause* 1)
 
 (defstruct (worker-info (:constructor build-worker-info ()))
-  "the only info tracked by a worker is the number of worker nodes of each type
-and the number of outstanding requests of each type"
+  "the only info tracked by a worker is the number of worker nodes of each type,
+the number of outstanding requests of each type, and the tasks completed of
+each type."
   (type-counts (make-instance 'thash-table :test 'equal) :read-only t)
-  (outstanding-request-counts (make-instance 'thash-table :test 'equal) :read-only t))
+  (outstanding-request-counts (make-instance 'thash-table :test 'equal)
+   :read-only t)
+  (tasks-completed (make-instance 'thash-table :test 'equal) :read-only t))
 
 (transactional
     (defstruct (master (:constructor build-master))
@@ -177,12 +181,46 @@ and a table of node type symbols to node recipes"
      (start-successful master id type-id))
 
     ((start-node-failure-v0 id type-id cat msg)
-     (start-unsuccessful master id type-id cat msg))))
+     (start-unsuccessful master id type-id cat msg))
+
+    ((worker-task-completed-v0 id type-id)
+     (task-completed master id type-id))))
 
 (defun send-pong-v0 (socket client-id)
   (v:debug '(:master.handler.ping) "got message (~a)" client-id)
   (send-msg socket *mmop-v0* (pong-v0 client-id))
   (v:debug '(:master.handler.ping) "sent pong"))
+
+(defun task-completed (master client-id type-id)
+  "Handles a task completed message by decrementing the type count for that
+machine and incrementing the task completed count for that machine."
+  (v:info :master.handler "~a task completed on ~a"
+          type-id client-id)
+  (atomic
+   (let ((type-val
+           (get-ghash
+            (worker-info-type-counts (get-ghash (master-workers master) client-id))
+            type-id 0))
+         (tasks-val
+           (get-ghash
+            (worker-info-tasks-completed
+             (get-ghash (master-workers master) client-id))
+            type-id 0)))
+     (if (zerop type-val)
+         (v:error :master.handler.task-complete
+                  "task of type ~a completed with no running nodes on worker ~a"
+                  type-id client-id)
+         (setf
+          (get-ghash
+           (worker-info-type-counts
+            (get-ghash (master-workers master) client-id))
+           type-id)
+          (1- type-val)
+          (get-ghash
+           (worker-info-tasks-completed
+            (get-ghash (master-workers master) client-id))
+           type-id)
+          (1+ tasks-val))))))
 
 (defun start-unsuccessful (master client-id type-id cat msg)
   "removes the record of the outstanding request"
