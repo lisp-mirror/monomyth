@@ -19,8 +19,8 @@
   (start-node-success-v0 string)
   ;; type reason-category reason-message
   (start-node-failure-v0 string string string)
-  ;; worker-id node-type
-  (worker-task-completed-v0 string string))
+  ;; node-type
+  (worker-task-completed-v0 string))
 
 (adt:defdata received-mmop
   ;; type recipe
@@ -41,8 +41,7 @@
                ,(start-node-failure-v0%2 message)))
 
 (defmethod create-frames ((message worker-task-completed-v0))
-  `(,*mmop-v0* "WORKER-TASK-COMPLETED" ,(worker-task-completed-v0%0 message)
-               ,(worker-task-completed-v0%1 message)))
+  `(,*mmop-v0* "WORKER-TASK-COMPLETED" ,(worker-task-completed-v0%0 message)))
 
 (defun pull-worker-message (socket)
   "pulls down a message designed for the worker dealer socket and attempts to

@@ -109,7 +109,6 @@
   (testing "worker-task-completed"
     (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
           (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
-          (test-worker "test-work")
           (test-type "test-type"))
       (pzmq:with-context nil
         (pzmq:with-sockets ((server :router) (client :dealer))
@@ -118,10 +117,10 @@
           (pzmq:connect client "tcp://localhost:55555")
           (pzmq:bind server "tcp://*:55555")
 
-          (send-msg client *mmop-v0* (mmop-w:worker-task-completed-v0 test-worker test-type))
+          (send-msg client *mmop-v0* (mmop-w:worker-task-completed-v0 test-type))
           (adt:match mmop-m:received-mmop (mmop-m:pull-master-message server)
             ((mmop-m:worker-task-completed-v0 worker-id node-type)
-             (ok (string= worker-id test-worker))
+             (ok (string= worker-id client-name))
              (ok (string= node-type test-type)))
             (_ (fail "mmop message is of wrong type")))))))
   
