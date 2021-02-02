@@ -274,17 +274,31 @@ to a plist with :queued"
               :initial-value (fset:empty-map))))
 
 (transaction
+    (defun pull-worker-type-completed-info (worker)
+      "takes a worker-info and produces an fset map that links each recipe type
+to a plist with :completed"
+      (reduce #'(lambda (acc val) (fset:with acc (car val) `(:|completed| ,(cdr val))))
+              (ghash-pairs (worker-info-tasks-completed worker))
+              :initial-value (fset:empty-map))))
+
+(transaction
     (defun pull-worker-type-info (worker)
       "takes a worker-info and produces an fset map that links each recipe type
 to a plist with :running and :queued"
-      (fset:map-union (pull-worker-type-queued-info worker)
-                      (pull-worker-type-running-info worker)
-                      #'append)))
+      (fset:map-union
+       (fset:map-union
+        (pull-worker-type-queued-info worker)
+        (pull-worker-type-running-info worker)
+        #'append)
+        (pull-worker-type-completed-info worker)
+        #'append)))
 
 (defun combine-type-plist (l1 l2)
   "takes two type count plists and combines the counts"
   (flet ((add-property (prop) (+ (getf l1 prop 0) (getf l2 prop 0))))
-    `(:|running| ,(add-property :|running|) :|queued| ,(add-property :|queued|))))
+    `(:|running| ,(add-property :|running|)
+       :|queued| ,(add-property :|queued|)
+      :|completed| ,(add-property :|completed|))))
 
 (transaction
     (defun pull-master-type-info (master)
