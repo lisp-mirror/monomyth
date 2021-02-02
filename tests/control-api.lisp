@@ -174,11 +174,12 @@
         (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
         (uri (quri:uri *api-uri*)))
     (start-server *master-uri* *api-port*)
-    (bt:make-thread #'(lambda ()
-                        (start-worker worker (format nil "tcp://localhost:~a" *master-port*))
-                        (run-worker worker)
-                        (stop-worker worker)
-                        (pass "worker-stopped")))
+    (bt:make-thread
+     #'(lambda ()
+         (start-worker worker (format nil "tcp://localhost:~a" *master-port*))
+         (run-worker worker)
+         (stop-worker worker)
+         (pass "worker-stopped")))
     (add-recipe master recipe1)
     (add-recipe master recipe2)
     (add-recipe master recipe3)
@@ -219,13 +220,29 @@
         (ok (= (nth 1 resp) 200))
         (confirm-recipe-counts (parse (car resp)))))
 
+    (testing "node completed"
       (pzmq:with-context nil
-        (pzmq:with-socket client :dealer
-          (pzmq:setsockopt client :identity client-name)
-          (pzmq:connect client (format nil "tcp://localhost:~a" *master-port*))
+        (pzmq:with-socket wrkr :dealer
+          (pzmq:setsockopt wrkr :identity (worker/name worker))
+          (pzmq:connect wrkr (format nil "tcp://localhost:~a" *master-port*))
 
-          (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker)))
-          (test-shutdown-success client)))
+          (send-msg wrkr *mmop-v0* (mmop-w:worker-task-completed-v0 "TEST-NODE2"))
+          (send-msg wrkr *mmop-v0* (mmop-w:worker-task-completed-v0 "TEST-NODE1"))))
+
+      (sleep 1)
+
+      (let ((resp (multiple-value-list (dex:get uri))))
+        (ok (= (nth 1 resp) 200))
+        (print (parse (car resp)))
+        ))
+    
+    (pzmq:with-context nil
+      (pzmq:with-socket client :dealer
+        (pzmq:setsockopt client :identity client-name)
+        (pzmq:connect client (format nil "tcp://localhost:~a" *master-port*))
+
+        (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker)))
+        (test-shutdown-success client)))
 
     (stop-server)
     (stop-master master)
@@ -249,9 +266,9 @@
     (setf (quri:uri-path uri) "/worker-info")
 
     (testing "no workers running"
-             (let ((resp (multiple-value-list (dex:get uri))))
-               (ok (= (nth 1 resp) 200))
-               (ok (string= (car resp) (to-json '())))))
+      (let ((resp (multiple-value-list (dex:get uri))))
+        (ok (= (nth 1 resp) 200))
+        (ok (string= (car resp) (to-json '())))))
 
     (bt:make-thread #'(lambda ()
                         (start-worker worker1 (format nil "tcp://localhost:~a" *master-port*))
@@ -272,47 +289,48 @@
     (sleep .1)
 
     (testing "workers running, no recipes"
-             (let* ((resp (multiple-value-list (dex:get uri)))
-                    (body (parse (car resp))))
-               (ok (= (nth 1 resp) 200))
-               (iter:iterate
-                (iter:for worker-info in body)
-                (ok (member (getf worker-info :|worker_id|) worker-ids :test #'string=))
-                (ok (equal (getf worker-info :|nodes|) '())))))
+      (let* ((resp (multiple-value-list (dex:get uri)))
+             (body (parse (car resp))))
+        (ok (= (nth 1 resp) 200))
+        (iter:iterate
+          (iter:for worker-info in body)
+          (ok (member (getf worker-info :|worker_id|) worker-ids :test #'string=))
+          (ok (equal (getf worker-info :|nodes|) '())))))
 
-    (pzmq:with-context nil
-      (pzmq:with-socket client :dealer
-        (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client (format nil "tcp://localhost:~a" *master-port*))
+    (testing "started nodes"
+      (pzmq:with-context nil
+        (pzmq:with-socket client :dealer
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client (format nil "tcp://localhost:~a" *master-port*))
 
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
-        (test-request-success client)
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
-        (test-request-success client)
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
-        (test-request-success client)
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
-        (test-request-success client)
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE1"))
-        (test-request-success client)
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
-        (test-request-success client)
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
-        (test-request-success client)))
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
+          (test-request-success client)
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
+          (test-request-success client)
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
+          (test-request-success client)
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
+          (test-request-success client)
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE1"))
+          (test-request-success client)
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
+          (test-request-success client)
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
+          (test-request-success client)))
 
-    (sleep .1)
+      (sleep .1)
 
-    (let* ((resp (multiple-value-list (dex:get uri)))
-           (body (parse (car resp)))
-           (counts (reduce
-                    #'(lambda (acc val)
-                        (fset:map-union
-                         acc (node-count-plist-to-map (getf val :|nodes|)) #'add-node-count))
-                    body :initial-value (fset:empty-map))))
-      (ok (= (nth 1 resp) 200))
-      (ok (= (fset:lookup counts "TEST-NODE1") 1))
-      (ok (= (fset:lookup counts "TEST-NODE2") 2))
-      (ok (= (fset:lookup counts "TEST-NODE3") 4)))
+      (let* ((resp (multiple-value-list (dex:get uri)))
+             (body (parse (car resp)))
+             (counts (reduce
+                      #'(lambda (acc val)
+                          (fset:map-union
+                           acc (node-count-plist-to-map (getf val :|nodes|)) #'add-node-count))
+                      body :initial-value (fset:empty-map))))
+        (ok (= (nth 1 resp) 200))
+        (ok (= (fset:lookup counts "TEST-NODE1") 1))
+        (ok (= (fset:lookup counts "TEST-NODE2") 2))
+        (ok (= (fset:lookup counts "TEST-NODE3") 4))))
 
     (stop-server)
     (stop-master master)
