@@ -1,96 +1,96 @@
 ("quicklisp" .
  (:class qlot/source/dist:source-dist
   :initargs (:distribution "http://beta.quicklisp.org/dist/quicklisp.txt" :%version :latest)
-  :version "2020-10-16"))
+  :version "2021-01-24"))
 ("flexi-streams" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("cl-store" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("stmx" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("closer-mop" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("rutils" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("trivia" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("jonathan" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("fset" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("alexandria" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("cl-algebraic-data-type" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("pzmq" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("uuid" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("iterate" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("verbose" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("cl-rabbit" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("babel" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("lucerne" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("woo" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("rove" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("quri" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("dexador" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("cl-mock" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
 ("optima" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-10-16"))
+  :version "ql-2021-01-24"))
