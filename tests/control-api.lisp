@@ -233,6 +233,7 @@
 
       (let ((resp (multiple-value-list (dex:get uri))))
         (ok (= (nth 1 resp) 200))
+        (print "TEST")
         (print (parse (car resp)))
         ))
     

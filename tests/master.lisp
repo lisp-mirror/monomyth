@@ -186,8 +186,10 @@
         (testing "task complete"
           (iter:iterate
             (iter:for name in (find-active-workers master))
-            (iter:for client in (get-socket name `(,client1 ,client2 ,client3)))
-            (test-task-complete master client name)))
+            (format t "CLIENT ~a~%" name)
+            (iter:iterate
+              (iter:for client in (get-socket name `(,client1 ,client2 ,client3)))
+              (test-task-complete master client name))))
         
         (testing "task complete-failed"
           (flet ((get-count ()
@@ -241,10 +243,10 @@
            (atomic
             (get-ghash (worker-info-type-counts
                         (get-ghash (master-workers master) name))
-                       "TEST-NODE1"))))
+                       "TEST-NODE2"))))
     (let ((old-count (get-count)))
       (send-msg client *mmop-v0*
-                (mmop-w:worker-task-completed-v0 "TEST-NODE1"))
+                (mmop-w:worker-task-completed-v0 "TEST-NODE2"))
       (sleep .1)
 
       (ok (= (1- old-count) (get-count)))
@@ -259,7 +261,7 @@
        (zerop (atomic (get-ghash
                        (worker-info-type-counts
                         (get-ghash (master-workers master) val))
-                       "TEST-NODE1" 0))))
+                       "TEST-NODE2" 0))))
    (atomic (ghash-keys (master-workers master)))))
 
 (defun test-client-recieves-start-node (socket type-id recipe)
@@ -286,11 +288,18 @@
 (defun respond-to-reqs (socket reqs results-table)
   (iter:iterate
     (iter:for req in reqs)
-    (iter:for msg = (if (zerop (random 2))
-                        (progn
-                          (incf (gethash req results-table 0))
-                          (mmop-w:start-node-success-v0 req))
-                        (mmop-w:start-node-failure-v0 req "test" "test")))
+    (iter:for msg = (cond
+                      ((string= "TEST-NODE2" req)
+                       (progn
+                         (incf (gethash req results-table 0))
+                         (mmop-w:start-node-success-v0 req)))
+
+                      ((zerop (random 2))
+                       (progn
+                         (incf (gethash req results-table 0))
+                         (mmop-w:start-node-success-v0 req)))
+
+                      (t (mmop-w:start-node-failure-v0 req "test" "test"))))
     (send-msg socket *mmop-v0* msg)))
 
 (defun test-resonses (master client-id expected-results)
