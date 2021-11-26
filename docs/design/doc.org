@@ -95,7 +95,7 @@ the task complete and informs the worker, which shuts down the node.
 Worker servers exist to create and manage their threads and little else.
 
 They interact with the masters and hear from nodes over MMOP, specifically with
-a dealer socket and pull socket respecfully.
+a dealer socket and pull socket respectfully.
 
 A quick note on connections to the data streams.
 Currently, the ~rmq-node~ has one RabbitMQ connection per thread (as a result
