@@ -277,7 +277,6 @@ to a plist with :queued"
     (defun pull-worker-type-completed-info (worker)
       "takes a worker-info and produces an fset map that links each recipe type
 to a plist with :completed"
-      (print 'running)
       (reduce #'(lambda (acc val) (fset:with acc (car val) `(:|completed| ,(cdr val))))
               (ghash-pairs (worker-info-tasks-completed worker))
               :initial-value (fset:empty-map))))
