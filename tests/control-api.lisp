@@ -231,12 +231,15 @@
 
       (sleep 1)
 
-      (let ((resp (multiple-value-list (dex:get uri))))
+      (let* ((resp (multiple-value-list (dex:get uri)))
+             (body (parse (car resp))))
         (ok (= (nth 1 resp) 200))
-        (print "TEST")
-        (print (parse (car resp)))
-        ))
-    
+        (iter:iterate
+          (iter:for item in body)
+          (iter:for name = (getf item :|type|))
+          (if (or (string= "TEST-NODE2" name) (string= "TEST-NODE1" name))
+              (ok (= 1 (getf (getf item :|count|) :|completed|)))))))
+
     (pzmq:with-context nil
       (pzmq:with-socket client :dealer
         (pzmq:setsockopt client :identity client-name)
