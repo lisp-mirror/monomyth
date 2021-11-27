@@ -18,7 +18,6 @@
 (in-package :monomyth/master)
 
 (defparameter *internal-conn-name* "inproc://mmop-master-routing")
-(defparameter *end-message* "END")
 (defparameter *router-thread-name* "monomyth-master-router")
 (defparameter *worker-thread-prefix* "monomyth-worker-thread")
 (defparameter *shutdown-pause* 1)
