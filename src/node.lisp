@@ -29,7 +29,7 @@
 
 (defgeneric startup (node context worker-address &optional build-worker-thread)
   (:documentation "performs any initial start up to ensure the node is working as corrected.
-The context is used to make a local 
+The context is used to make socket connections.
 The build worker thread option exists for testing purposes."))
 
 (defgeneric pull-items (node)
