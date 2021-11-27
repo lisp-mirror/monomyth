@@ -95,7 +95,7 @@ the task complete and informs the worker, which shuts down the node.
 Worker servers exist to create and manage their threads and little else.
 
 They interact with the masters and hear from nodes over MMOP, specifically with
-a dealer socket and pull socket respecfully.
+a dealer socket and pull socket respectfully.
 
 A quick note on connections to the data streams.
 Currently, the ~rmq-node~ has one RabbitMQ connection per thread (as a result
@@ -192,6 +192,15 @@ It results in a json-info-response.
 Frames:
 1. ~RECIPE-INFO~
 
+**** Resulting Schema
+
+#+BEGIN_SRC json
+[{
+    "type": "<type>",
+    "count": [{"running": <count>, "queued": <count>, "completed": <count>}]
+}]
+#+END_SRC
+
 *** Worker Info [worker-info]
 
 The worker-info message is sent by the control server to the master server
@@ -200,6 +209,12 @@ It results in a json-info-response.
 
 Frames:
 1. ~WORKER-INFO~
+
+**** Resulting Schema
+
+#+BEGIN_SRC json
+[{"worker_id": "<id>", "nodes": [{"recipe_name": "<name>", "node_count": <count>}]}]
+#+END_SRC
 
 *** JSON Info Response [json-info-response]
 
@@ -338,7 +353,7 @@ Frames:
 2. ~<node-type>~
 3. ~<node-id>~
 
-*** Worker Task Completed
+*** Worker Task Completed [worker-task-completed]
 
 The worker-task-completed message indicates that a worker has completed a bounded
 stream.

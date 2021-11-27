@@ -4,6 +4,7 @@
   (:export worker
            worker/name
            worker/nodes
+           worker/master-socket
            start-worker
            run-worker
            build-node
@@ -101,7 +102,7 @@ it should be okay start a node"))
       (send-msg (worker/master-socket worker) (worker/mmop-version worker)
                 (mmop-w:start-node-failure-v0
                  node-type "recipe build" "worker cannot handle recipe type")))
-       
+
     (:no-error (res)
       (startup res (worker/context worker) (worker/nodes-socket-address worker))
       (let ((name (node/node-name res)))

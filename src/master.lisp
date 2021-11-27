@@ -18,7 +18,6 @@
 (in-package :monomyth/master)
 
 (defparameter *internal-conn-name* "inproc://mmop-master-routing")
-(defparameter *end-message* "END")
 (defparameter *router-thread-name* "monomyth-master-router")
 (defparameter *worker-thread-prefix* "monomyth-worker-thread")
 (defparameter *shutdown-pause* 1)
@@ -258,33 +257,32 @@ machine and incrementing the task completed count for that machine."
          (build-worker-info))))
 
 (transaction
-    (defun pull-worker-type-running-info (worker)
+    (defun pull-speficic-worker-info (worker pull-fn key)
       "takes a worker-info and produces an fset map that links each recipe type
-to a plist with :running"
-      (reduce #'(lambda (acc val) (fset:with acc (car val) `(:|running| ,(cdr val))))
-              (ghash-pairs (worker-info-type-counts worker))
-              :initial-value (fset:empty-map))))
-
-(transaction
-    (defun pull-worker-type-queued-info (worker)
-      "takes a worker-info and produces an fset map that links each recipe type
-to a plist with :queued"
-      (reduce #'(lambda (acc val) (fset:with acc (car val) `(:|queued| ,(cdr val))))
-              (ghash-pairs (worker-info-outstanding-request-counts worker))
+to a plist with with the key linked to the pulled info"
+      (declare (worker-info worker) (function pull-fn) (keyword key))
+      (reduce #'(lambda (acc val) (fset:with acc (car val) `(,key ,(cdr val))))
+              (ghash-pairs (funcall pull-fn worker))
               :initial-value (fset:empty-map))))
 
 (transaction
     (defun pull-worker-type-info (worker)
       "takes a worker-info and produces an fset map that links each recipe type
 to a plist with :running and :queued"
-      (fset:map-union (pull-worker-type-queued-info worker)
-                      (pull-worker-type-running-info worker)
-                      #'append)))
+      (fset:map-union
+       (fset:map-union
+        (pull-speficic-worker-info worker #'worker-info-outstanding-request-counts :|queued|)
+        (pull-speficic-worker-info worker #'worker-info-type-counts :|running|)
+        #'append)
+        (pull-speficic-worker-info worker #'worker-info-tasks-completed :|completed|)
+        #'append)))
 
 (defun combine-type-plist (l1 l2)
   "takes two type count plists and combines the counts"
   (flet ((add-property (prop) (+ (getf l1 prop 0) (getf l2 prop 0))))
-    `(:|running| ,(add-property :|running|) :|queued| ,(add-property :|queued|))))
+    `(:|running| ,(add-property :|running|)
+       :|queued| ,(add-property :|queued|)
+      :|completed| ,(add-property :|completed|))))
 
 (transaction
     (defun pull-master-type-info (master)

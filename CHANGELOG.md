@@ -8,15 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Nodes now support not placing items in a destination queue.
 - Nodes now support not pulling items in a source queue.
-- Nodes now support completing a bounded stream.
+- Nodes now support completing a bounded stream and the recipe-info endpoint will
+  report completed nodes.
 
 ### Changed
 - Node shutdown now attempts to kill the worker thread.
 
 ### Removed
-- RMQ node recipes no longer control destination and source queues, these are 
+- RMQ node recipes no longer control destination and source queues, these are
   now set in the dsl via the `build-node` functions.
-- Node recipes no longer control batch size, these are no set in the dsl via the 
+- Node recipes no longer control batch size, these are no set in the dsl via the
   `build-node` functions.
 
 ## [0.3.1] - 2020-11-11
@@ -25,11 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.0] - 2020-11-02
 ### Added
-- Built define rmq node macro that constructs all of the classes, constructors, 
+- Built define rmq node macro that constructs all of the classes, constructors,
   and also builds the methods that support building and running nodes.
 - Built define system macro that takes a list of node info an constructs all classes
   and queues.
-- Recipes built by `define-system` are now automatically stored in the master server 
+- Recipes built by `define-system` are now automatically stored in the master server
   at start up.
 
 ## [0.2.0] - 2020-10-13
@@ -42,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - MMOP structs changed to ADTs.
-- Master worker threads now using dealer sockets (allowing for bi-directional communication 
+- Master worker threads now using dealer sockets (allowing for bi-directional communication
   through the router), but the load balancing is round-robin.
 - Changed to using qlot to manage dependencies.
 
