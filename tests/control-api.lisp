@@ -220,16 +220,15 @@
         (ok (= (nth 1 resp) 200))
         (confirm-recipe-counts (parse (car resp)))))
 
+    (sleep .1)
+
     (testing "node completed"
-      (pzmq:with-context nil
-        (pzmq:with-socket wrkr :dealer
-          (pzmq:setsockopt wrkr :identity (worker/name worker))
-          (pzmq:connect wrkr (format nil "tcp://localhost:~a" *master-port*))
+      (send-msg (worker/master-socket worker) *mmop-v0*
+                (mmop-w:worker-task-completed-v0 "TEST-NODE2"))
+      (send-msg (worker/master-socket worker) *mmop-v0*
+                (mmop-w:worker-task-completed-v0 "TEST-NODE1"))
 
-          (send-msg wrkr *mmop-v0* (mmop-w:worker-task-completed-v0 "TEST-NODE2"))
-          (send-msg wrkr *mmop-v0* (mmop-w:worker-task-completed-v0 "TEST-NODE1"))))
-
-      (sleep 1)
+      (sleep .1)
 
       (let* ((resp (multiple-value-list (dex:get uri)))
              (body (parse (car resp))))
@@ -238,7 +237,7 @@
           (iter:for item in body)
           (iter:for name = (getf item :|type|))
           (if (or (string= "TEST-NODE2" name) (string= "TEST-NODE1" name))
-              (ok (= 1 (getf (getf item :|count|) :|completed|)))))))
+              (ok (= 1 (getf (getf item :|counts|) :|completed|)))))))
 
     (pzmq:with-context nil
       (pzmq:with-socket client :dealer
