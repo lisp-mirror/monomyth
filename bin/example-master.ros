@@ -14,5 +14,5 @@ exec ros -Q -- $0 "$@"
 
 (defun main (&rest argv)
   (declare (ignorable argv))
-  (if (rove:run :monomyth/example-master) 0 1))
+  (if (rove:run :monomyth/basic-example-master) 0 1))
 ;;; vim: set ft=lisp lisp:

@@ -78,12 +78,12 @@
   :description "Test system for monomyth"
   :perform (test-op (op c) (symbol-call :rove '#:run c)))
 
-(defsystem "monomyth/example-master"
+(defsystem "monomyth/basic-example-master"
   :author "Paul Ricks"
   :license "MPL 2.0"
   :depends-on (:monomyth
                :rove)
-  :components ((:module "example"
+  :components ((:module "example/basic"
                 :components
                 ((:file "utils")
                  (:file "master"
@@ -92,12 +92,12 @@
 master perspective"
   :perform (test-op (op c) (symbol-call :rove '#:run c)))
 
-(defsystem "monomyth/example-worker"
+(defsystem "monomyth/basic-example-worker"
   :author "Paul Ricks"
   :license "MPL 2.0"
   :depends-on (:monomyth
                :rove)
-  :components ((:module "example"
+  :components ((:module "example/basic"
                 :components
                 ((:file "utils")
                  (:file "worker"
