@@ -24,8 +24,9 @@ This allows for a fail fast structure.
 
 The next is the Nodes.
 These nodes handle a single distinct action on a single thread.
-They first pick up a batch of data from the data stream, act on it, and place it
-back on a new stream (or queue) on the outside system.
+In many cases they first pick up a batch of data from the data stream, act on it,
+and place it back on a new stream (or queue) on the outside system.
+Both the picking up and placing of the data onto the data stream is optional
 
 The nodes are started and stopped by a worker server.
 The server takes no other action other than this, nodes cannot by altered.
@@ -69,8 +70,8 @@ extensibility and good error checking.
 
 The separation of MMOP and the data streams is designed to support this exact idea.
 MMOP support the 'chatty' control issues, which will hopefully one day include
-everything from the basic control commands being built now, to one day things as well
-as monitoring and telemetry.
+everything from the basic control commands being built now, to one day including
+monitoring and telemetry.
 Meanwhile, these existing, proven, products support the 'nasty', portion of our
 communication.
 
