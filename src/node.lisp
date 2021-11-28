@@ -164,8 +164,10 @@ Produces a list of length node/batch-size filled with :stub-item keywords."
 (defmethod startup :after ((node node) context worker-address &optional (build-worker-thread t))
   (setf (node/socket node) (pzmq:socket context :push))
   (pzmq:setsockopt (node/socket node) :identity (node/node-name node))
-  (pzmq:connect (node/socket node) worker-address)
   (when build-worker-thread
+    ;; NOTE: This connection is not necessary if not running the worker thread
+    ;; because there should never be call by the worker thread to the worker.
+    (pzmq:connect (node/socket node) worker-address)
     (v:info :node "starting thread for ~a" (node/node-name node))
     (bt:make-thread
      #'(lambda ()
