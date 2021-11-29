@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nodes now support not pulling items in a source queue.
 - Nodes now support completing a bounded stream and the recipe-info endpoint will
   report completed nodes.
+- The DSL now supports extending the node startup and shutdown functions.
+  These functions should take no arguments and run at the start of the startup
+  sequence and the end of the shutdown sequence respectively.
 
 ### Changed
 - Node shutdown now attempts to kill the worker thread.

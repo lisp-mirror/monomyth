@@ -27,8 +27,10 @@
 
 (defparameter *stub-message* "STUB-ITEM")
 
-(defgeneric startup (node context worker-address &optional build-worker-thread)
-  (:documentation "performs any initial start up to ensure the node is working as corrected.
+(defgeneric startup
+    (node context worker-address &optional build-worker-thread)
+  (:documentation
+   "performs any initial start up to ensure the node is working as corrected.
 The context is used to make socket connections.
 The build worker thread option exists for testing purposes."))
 
@@ -56,13 +58,14 @@ the step can be :pull, :transform, or :place
 the result is the full payload sent by the last step"))
 
 (defgeneric shutdown (node)
-  (:documentation "Graceful shutdown of the node.
+  (:documentation
+   "Graceful shutdown of the node.
 Cannot be called within the node as it kills the thread, assumes that
 the thread name is the node name."))
 
 (defgeneric complete-task (node)
-  (:documentation "The node signals that it has completed its task and then
-stops the thread."))
+  (:documentation
+   "The node signals that it has completed its task and then stops the thread."))
 
 (transactional
     (defclass node ()
@@ -161,7 +164,8 @@ Produces a list of length node/batch-size filled with :stub-item keywords."
         (v:error :node.event-loop "unexpected node error in ~a: ~a" step msg)
         (handle-failure node step (node-error/items c))))))
 
-(defmethod startup :after ((node node) context worker-address &optional (build-worker-thread t))
+(defmethod startup :after
+    ((node node) context worker-address &optional (build-worker-thread t))
   (setf (node/socket node) (pzmq:socket context :push))
   (pzmq:setsockopt (node/socket node) :identity (node/node-name node))
   (when build-worker-thread
