@@ -127,17 +127,40 @@ rabbit-mq is the only data stream supported.
 This macro takes the node name, transformation function, batch-size, and optional
 source and destination queues.
 That information is then used to define the node and recipe classes, the class
-constructors, and fill out the methods used by the node and the work.
+constructors, and fill out the methods used by the node as well as some helper
+functions for the master server.
 
 The other macro is ~define-system~.
 At the moment this macro is very basic, and only takes a series of plists that
-contain a ~:name~, a ~:fn~, and a ~:batch-size~.
+should always contain a ~:name~, a ~:fn~, and a ~:batch-size~ and optionally contain
+a ~:start-fn~ and ~:stop-fn~.
 The macro then constructs the queue names in a deterministic manor, and builds the
 nodes using those queues.
 Right now the nodes only work in a single, straight line, with optional support for
 not pulling from the first data stream and not placing anything on the last.
 The macro then passes the recipe into a method used by the master server at start
 up to load those recipes in.
+
+** Node Startup and Shutdown
+All nodes have the following generic functions used to control their life cycle:
+#+INCLUDE: "../../src/node.lisp" src common-lisp :lines "30-36"
+#+INCLUDE: "../../src/node.lisp" src common-lisp :lines "60-65"
+
+For the most part, these methods handle actions entirely internal to the function
+of the node and its' interaction with the larger Monomyth system.
+However, the ~:start-fn~ and ~:stop-fn~ in the DSL both extend these functions,
+so understanding the state the node is in when the user supplied code is executed
+may be important.
+At the time the user code is run at ~startup~ the node should have no active
+connections to the Monomyth system or any data streams and the worker thread
+is not yet running.
+At the time the user code is run at ~shutdown~ the node should have terminated
+all active connections to the Monomyth system and any data streams and the
+worker thread should be terminated.
+This is set up this way to ensure that user ~startup~ code is always run before
+any user defined worker code is executed and that user ~shutdown~ is run after
+all user defined worker code is executed, ensuring the cleanest life cycle for
+the node.
 
 * MMOP
 MMOP is a protocol designed to run on top of ZeroMQ used by master and worker servers.
