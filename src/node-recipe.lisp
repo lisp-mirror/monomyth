@@ -2,6 +2,7 @@
   (:use :cl :uuid)
   (:export node-recipe
            node-recipe/type
+           node-recipe/dependent-nodes
            name-node
            serialize-recipe
            deserialize-recipe))
@@ -14,7 +15,12 @@
   ((type :reader node-recipe/type
          :initarg :type
          :initform (error "recipe type must be set")
-         :documentation "node 'type', often used to name nodes"))
+         :documentation "node 'type', often used to name nodes")
+   (dependent-nodes
+    :reader node-recipe/dependent-nodes
+    :initarg :dependent-nodes
+    :initform nil
+    :documentation "all nodes that use the output of nodes created by this recipe"))
   (:documentation "everything the systems needs to make a new node"))
 
 (defmethod name-node ((recipe node-recipe))

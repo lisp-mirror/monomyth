@@ -120,6 +120,25 @@ build a ZMQ client themselves.
 Currently, the control api can start nodes, stop workers, and request recipe
 information that includes how many nodes are running that recipe.
 
+* Bounded Tasks
+
+By default all tasks run forever, but Monomyth has a concept of bounded tasks
+that can complete (and then shutdown).
+The easiest way to achieve this is to have a condition in the node's complete task
+method.
+This method sends a signal to the worker that the node is ready to finish.
+The worker then triggers the nodes shutdown method, removes the node from its
+internal store, and informs the master of the completion.
+
+(TODO)
+The other way tasks can be completed is through dependent nodes.
+When a system is declared connected nodes are declared as dependent on one.
+Once all the nodes of one type that a master is aware of complete their task
+(more specifically, once the last node a master is aware of completes its task)
+all workers receive a ~complete-task~ mmop message for all dependent node types.
+This indicates that any nodes they have with that type should shutdown once they
+have no more messages on the data stream.
+
 * DSL
 Monomyth currently defines two macros that help build simple workflows.
 The first is ~define-rmq-node~, which is the only node macro at the moment because

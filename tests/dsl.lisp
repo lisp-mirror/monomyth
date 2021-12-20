@@ -1,5 +1,6 @@
 (defpackage monomyth/tests/dsl
-  (:use :cl :rove :monomyth/dsl :monomyth/node :monomyth/rmq-node :monomyth/tests/utils)
+  (:use :cl :rove :monomyth/dsl :monomyth/node :monomyth/rmq-node :monomyth/tests/utils
+        :monomyth/node-recipe)
   (:shadow :closer-mop))
 (in-package :monomyth/tests/dsl)
 
@@ -54,3 +55,10 @@
     (ok system-test-var)
     (shutdown tnode)
     (ng system-test-var)))
+
+(define-system ()
+  (:name dep-test1 :batch-size 1)
+  (:name dep-test2 :batch-size 1))
+
+(deftest dependents-passed-to-recipe
+  (ok (eq '(:dep-test2) (node-recipe/dependent-nodes (build-dep-test1-recipe)))))

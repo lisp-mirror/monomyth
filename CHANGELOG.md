@@ -13,9 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The DSL now supports extending the node startup and shutdown functions.
   These functions should take no arguments and run at the start of the startup
   sequence and the end of the shutdown sequence respectively.
+- Node recipes now contain a list of 'dependent' nodes (nodes next in the system).
+  The DSL will construct these automatically.
 
 ### Changed
-- Node shutdown now attempts to kill the worker thread.
+- Node shutdown now attempts to kill the worker thread and wait to complete their
+  last cycle before shutting down further.
 
 ### Removed
 - RMQ node recipes no longer control destination and source queues, these are

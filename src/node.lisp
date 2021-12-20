@@ -100,7 +100,11 @@ the thread name is the node name."))
         :documentation "whether or not to run the pull-items method")
        (running :accessor node/running
                 :initform t
-                :documentation "transactional condition that allows for safe shutdown"))
+                :documentation "transactional condition that allows for safe shutdown")
+       (complete :accessor node/complete
+                 :initform nil
+                 :documentation
+                 "transactional condition that waits till the work thread is done"))
       (:documentation "base node class for the monomyth flow system")))
 
 (define-condition node-error (error)
@@ -168,23 +172,29 @@ Produces a list of length node/batch-size filled with :stub-item keywords."
     ((node node) context worker-address &optional (build-worker-thread t))
   (setf (node/socket node) (pzmq:socket context :push))
   (pzmq:setsockopt (node/socket node) :identity (node/node-name node))
-  (when build-worker-thread
-    ;; NOTE: This connection is not necessary if not running the worker thread
-    ;; because there should never be call by the worker thread to the worker.
-    (pzmq:connect (node/socket node) worker-address)
-    (v:info :node "starting thread for ~a" (node/node-name node))
-    (bt:make-thread
-     #'(lambda ()
-         (iter:iterate
-           (iter:while (node/running node))
-           (run-iteration node)
-           (sleep .1)))
-     :name (format nil (node/node-name node)))))
+  (if build-worker-thread
+      (progn
+        ;; NOTE: This connection is not necessary if not running the worker thread
+        ;; because there should never be call by the worker thread to the worker.
+        (pzmq:connect (node/socket node) worker-address)
+        (v:info :node "starting thread for ~a" (node/node-name node))
+        (bt:make-thread
+         #'(lambda ()
+             (iter:iterate
+               (iter:while (node/running node))
+               (run-iteration node)
+               (sleep .1))
+             (atomic (setf (node/complete node) t)))
+         :name (format nil (node/node-name node))))
+      (atomic (setf (node/complete node) t))))
 
 (defmethod shutdown :before ((node node))
   (finish-output)
   (pzmq:close (node/socket node))
-  (atomic (setf (node/running node) nil)))
+  (atomic (setf (node/running node) nil))
+  (iter:iterate
+    (iter:until (node/complete node))
+    (sleep .1)))
 
 (defmethod shutdown :after ((node node))
   (let ((node-thread
