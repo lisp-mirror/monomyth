@@ -189,12 +189,12 @@ Produces a list of length node/batch-size filled with :stub-item keywords."
       (atomic (setf (node/complete node) t))))
 
 (defmethod shutdown :before ((node node))
-  (finish-output)
-  (pzmq:close (node/socket node))
   (atomic (setf (node/running node) nil))
   (iter:iterate
     (iter:until (node/complete node))
-    (sleep .1)))
+    (sleep .1))
+  (finish-output)
+  (pzmq:close (node/socket node)))
 
 (defmethod shutdown :after ((node node))
   (let ((node-thread
