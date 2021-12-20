@@ -43,15 +43,19 @@
 (define-rmq-node test-node nil 1 :source-queue *queue5* :dest-queue *queue1*)
 
 (defun fn1 (node item)
+  (declare (ignore node))
   (format nil "~a18" item))
 
 (defun fn2 (node item)
+  (declare (ignore node))
   (coerce (remove-if #'alpha-char-p (coerce item 'list)) 'string))
 
 (defun fn3 (node item)
+  (declare (ignore node))
   (format nil "~a" (* (parse-integer item) 7)))
 
 (defun fn4 (node item)
+  (declare (ignore node))
   (format nil "test ~a" item))
 
 (define-system ()
