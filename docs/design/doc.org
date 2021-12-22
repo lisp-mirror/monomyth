@@ -130,7 +130,6 @@ This method sends a signal to the worker that the node is ready to finish.
 The worker then triggers the nodes shutdown method, removes the node from its
 internal store, and informs the master of the completion.
 
-(TODO)
 The other way tasks can be completed is through dependent nodes.
 When a system is declared connected nodes are declared as dependent on one.
 Once all the nodes of one type that a master is aware of complete their task
@@ -404,4 +403,13 @@ The respective type counts for the worker should be adjusted.
 
 Frames:
 1. ~WORKER-TASK-COMPLETED~
+2. ~<node-type>~
+
+*** Complete Worker Task [complete-task]
+
+The complete-task message indicates that a worker should complete a task of the
+supplied type when there are no more messages left to consume.
+
+Frames:
+1. ~COMPLETE-TASK~
 2. ~<node-type>~

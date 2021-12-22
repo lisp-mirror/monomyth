@@ -10,6 +10,7 @@
            start-node-v0
            start-node-success-v0
            start-node-failure-v0
+           complete-task-v0
            shutdown-worker-v0))
 (in-package :monomyth/mmop-worker)
 
@@ -27,6 +28,8 @@
   (start-node-v0 string node-recipe)
   ;; node-type node-name
   (node-task-completed-v0 string string)
+  ;; node-type
+  (complete-task-v0 string)
   shutdown-worker-v0)
 
 (defmethod create-frames ((message worker-ready-v0))
@@ -62,7 +65,9 @@ translate it into an equivalent struct"
                                           (babel:string-to-octets recipe))))
                ((list "SHUTDOWN") shutdown-worker-v0)
                ((list "NODE-TASK-COMPLETED" node-type node-name)
-                (node-task-completed-v0 node-type node-name)))))
+                (node-task-completed-v0 node-type node-name))
+               ((list "COMPLETE-TASK" node-type)
+                (complete-task-v0 node-type)))))
 
     (if res res
         (error 'mmop-error :version *mmop-v0* :message "unknown mmop command"))))

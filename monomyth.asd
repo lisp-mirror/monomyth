@@ -74,6 +74,8 @@
                   :depends-on ("utils"))
                  (:file "master"
                   :depends-on ("utils"))
+                 (:file "bounded-tasks"
+                  :depends-on ("utils"))
                  (:file "control-api"))))
   :description "Test system for monomyth"
   :perform (test-op (op c) (symbol-call :rove '#:run c)))

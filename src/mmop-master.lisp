@@ -18,6 +18,7 @@
            stop-worker-request-failure-v0
            worker-ready-v0
            start-node-v0
+           complete-task-v0
            start-node-success-v0
            start-node-failure-v0
            shutdown-worker-v0))
@@ -38,6 +39,8 @@
   (stop-worker-request-success-v0 string)
   ;; client-id error-message status-code
   (stop-worker-request-failure-v0 string string integer)
+  ;; client-id node-type
+  (complete-task-v0 string string)
   ;; client-id
   (shutdown-worker-v0 string))
 
@@ -92,6 +95,10 @@
 
 (defmethod create-frames ((message shutdown-worker-v0))
   `(,(shutdown-worker-v0%0 message) ,*mmop-v0* "SHUTDOWN"))
+
+(defmethod create-frames ((message complete-task-v0))
+  `(,(complete-task-v0%0 message) ,*mmop-v0* "COMPLETE-TASK"
+    ,(complete-task-v0%1 message)))
 
 (defun pull-master-message (socket)
   "pulls down a message designed for the master router socket and attempts to

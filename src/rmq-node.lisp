@@ -138,6 +138,13 @@ return :success t with the :result if things go well"
             (return-from pull-items items)
             (build-error-response :pull items c))))))
 
+(defmethod remove-empty-messages ((node rmq-node) items)
+  (iter:iterate
+    (iter:for item in items)
+    (if (zerop (length (rmq-message-body item)))
+        (ack-message node item)
+        (iter:collect item))))
+
 (defmethod transform-items ((node rmq-node) pulled)
   (handler-case
       (iter:iterate
@@ -169,13 +176,14 @@ return :success t with the :result if things go well"
       (iter:iterate
         (iter:for item in result)
         (handler-case
-            ;; NOTE: not all failures result in a 'valid' message, that is a message
-            ;; that came from rmq.
-            ;; In this case we can just drop it on the floor.
-            ;; TODO: test this code path
-            (when (rmq-message-delivery-tag item)
+            (progn
               (send-message node (rmq-node/fail-queue node) (rmq-message-body item))
-              (nack-message node item nil))
+              ;; NOTE: not all failures result in a 'valid' message, that is a message
+              ;; that came from rmq.
+              ;; In this case we can just drop it on the floor.
+              ;; TODO: test this code path
+              (when (rmq-message-delivery-tag item)
+                (nack-message node item nil)))
           (rabbitmq-library-error (c)
             (v:error :node.event-loop "rmq-error- failed to place item (~d): ~a"
                        (rabbitmq-library-error/error-code c)
@@ -186,6 +194,3 @@ return :success t with the :result if things go well"
                            (rabbitmq-library-error/error-code c)
                            (rabbitmq-library-error/error-description c)))))))
       (error "unexpected step")))
-
-(defmethod complete-task :after ((node rmq-node))
-  (build-rmq-message))

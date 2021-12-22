@@ -1,6 +1,6 @@
 (defpackage monomyth/worker
   (:use :cl :uuid :monomyth/mmop :monomyth/mmop-worker :monomyth/node-recipe
-        :monomyth/node)
+        :monomyth/node :stmx)
   (:export worker
            worker/name
            worker/nodes
@@ -92,7 +92,22 @@ it should be okay start a node"))
      (shutdown (gethash node-name (worker/nodes worker)))
      (remhash node-name (worker/nodes worker))
      (send-msg (worker/master-socket worker) *mmop-v0*
-               (worker-task-completed-v0 node-type)))))
+               (worker-task-completed-v0 node-type)))
+
+    ((complete-task-v0 node-type) (complete-tasks worker node-type))))
+
+(defun complete-tasks (worker node-type)
+  "finds all nodes with the supplied node-type and sets them to complete when
+there are no more items on the data stream"
+  (v:debug :worker.complete-tasks "complete tasks request for ~a" node-type)
+  (let ((nodes (iter:iterate
+                 (iter:for (node-name node) in-hashtable (worker/nodes worker))
+                 (when (string= node-type (string (node/type node)))
+                   (iter:collect `(,node-name . ,node))))))
+    (dolist (node nodes)
+      (v:info :worker.complete-tasks "attempting to complete ~a" (car node))
+      (atomic (setf (node/complete-when-ready (cdr node)) t))))
+  t)
 
 (defun start-worker-node (worker node-type recipe)
   "Attempts to start a node and communicate the result to the master server."

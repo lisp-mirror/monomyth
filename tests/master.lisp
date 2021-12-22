@@ -189,6 +189,11 @@
             (iter:for client = (get-socket `(,client1 ,client2 ,client3) name))
             (test-task-complete master client name)))
 
+        (testing "complete task message sent"
+          (test-complete-task-msg client1)
+          (test-complete-task-msg client2)
+          (test-complete-task-msg client3))
+
         (testing "task complete-failed"
           (flet ((get-count ()
                    (atomic
@@ -248,6 +253,12 @@
                 (get-ghash (worker-info-tasks-completed
                             (get-ghash (master-workers master) name))
                            "TEST-NODE2")))))))
+
+(defun test-complete-task-msg (client)
+  (adt:match mmop-w:received-mmop (mmop-w:pull-worker-message client)
+    ((mmop-w:complete-task-v0 sent-node-id)
+     (ok (string= sent-node-id "TEST-NODE3")))
+    (_ (fail "unexpected message type"))))
 
 (defun find-active-workers (master)
   (remove-if

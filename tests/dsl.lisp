@@ -1,6 +1,6 @@
 (defpackage monomyth/tests/dsl
   (:use :cl :rove :monomyth/dsl :monomyth/node :monomyth/rmq-node :monomyth/tests/utils
-        :monomyth/node-recipe)
+        :monomyth/node-recipe :monomyth/rmq-worker :monomyth/worker)
   (:shadow :closer-mop))
 (in-package :monomyth/tests/dsl)
 
@@ -17,15 +17,21 @@
   (:name dsl-pull-test :fn nil :batch-size 1))
 
 (deftest pull-first-key
-  (let ((tnode (build-dsl-pull-test nil nil nil *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
+  (let* ((worker (build-rmq-worker :host *rmq-host* :port *rmq-port* :username *rmq-user*
+                                   :password *rmq-pass*))
+         (tnode (build-node worker (build-dsl-pull-test-recipe))))
     (ng (node/pull-source tnode))
-    (ng (rmq-node/source-queue tnode))))
+    (ng (rmq-node/source-queue tnode))
+    (ng (pull-items tnode))
+    (ok (build-stub-items tnode))))
 
 (define-system (:place-last nil)
   (:name dsl-place-test :fn nil :batch-size 1))
 
 (deftest place-past-key
-  (let ((tnode (build-dsl-place-test nil nil nil *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
+  (let* ((worker (build-rmq-worker :host *rmq-host* :port *rmq-port* :username *rmq-user*
+                                   :password *rmq-pass*))
+         (tnode (build-node worker (build-dsl-place-test-recipe))))
     (ng (node/place-destination tnode))
     (ng (rmq-node/dest-queue tnode))))
 
@@ -61,4 +67,4 @@
   (:name dep-test2 :batch-size 1))
 
 (deftest dependents-passed-to-recipe
-  (ok (eq '(:dep-test2) (node-recipe/dependent-nodes (build-dep-test1-recipe)))))
+  (ok (equal '(:dep-test2) (node-recipe/dependent-nodes (build-dep-test1-recipe)))))

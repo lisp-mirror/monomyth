@@ -4,10 +4,12 @@
   (:export *stub-message*
            startup
            build-stub-item
+           build-stub-items
            pull-items
            transform-items
            transform-fn
            place-items
+           remove-empty-messages
            handle-failure
            run-iteration
            shutdown
@@ -18,6 +20,7 @@
            node/type
            node/place-destination
            node/pull-source
+           node/complete-when-ready
            node-error
            node-error/step
            node-error/items
@@ -50,6 +53,11 @@ and applies the transform function to each one"))
 takes the entire payload sent by transform
 assumes that the items are passed under :items
 should return a plist with one of the slots as :success"))
+
+(defgeneric remove-empty-messages (node items)
+  (:documentation "it is valid, in certain situation, to have an empty message
+passed to the next node.
+These messages should be removed from any path user written code handles (and acked)."))
 
 (defgeneric handle-failure (node step result)
   (:documentation "actions to take if the returned plist contains :success false
@@ -101,6 +109,12 @@ the thread name is the node name."))
        (running :accessor node/running
                 :initform t
                 :documentation "transactional condition that allows for safe shutdown")
+       (complete-when-ready
+        :accessor node/complete-when-ready
+        :initform nil
+        :documentation
+        "transactional condition that indicates that the node should stop when
+there are no more items on the data stream")
        (complete :accessor node/complete
                  :initform nil
                  :documentation
@@ -157,16 +171,23 @@ Produces a list of length node/batch-size filled with :stub-item keywords."
     (iter:collect (build-stub-item node))))
 
 (defun run-iteration (node)
-  "runs an entire operation start to finish"
+  "runs an entire operation start to finish, returns t if items were found, nil otherwise"
   (handler-case
-      (place-items node (transform-items node (if (node/pull-source node)
-                                                  (pull-items node)
-                                                  (build-stub-items node))))
+      (let ((items (if (node/pull-source node)
+                       (remove-empty-messages node (pull-items node))
+                       (build-stub-items node))))
+        (place-items node (transform-items node items))
+        (if items t nil))
+
     (node-error (c)
       (let ((step (node-error/step c))
             (msg (node-error/message c)))
-        (v:error :node.event-loop "unexpected node error in ~a: ~a" step msg)
-        (handle-failure node step (node-error/items c))))))
+        (v:error `(:node.event-loop ,(node/type node))
+                 "unexpected node error in ~a: ~a" step msg)
+        (handle-failure node step (node-error/items c))
+        ;; NOTE: we are assuming that if there was a failure there was someting
+        ;; to fail *on*.
+        t))))
 
 (defmethod startup :after
     ((node node) context worker-address &optional (build-worker-thread t))
@@ -175,34 +196,32 @@ Produces a list of length node/batch-size filled with :stub-item keywords."
   (if build-worker-thread
       (progn
         ;; NOTE: This connection is not necessary if not running the worker thread
-        ;; because there should never be call by the worker thread to the worker.
+        ;; because there should never be a call by the worker thread to the worker.
         (pzmq:connect (node/socket node) worker-address)
-        (v:info :node "starting thread for ~a" (node/node-name node))
         (bt:make-thread
          #'(lambda ()
+             (v:info `(:node ,(node/type node))
+                     "starting thread for ~a" (node/node-name node))
              (iter:iterate
                (iter:while (node/running node))
-               (run-iteration node)
+               (when (and (not (run-iteration node)) (node/complete-when-ready node))
+                 (complete-task node))
                (sleep .1))
+             (v:info `(:node ,(node/type node))
+                     "work thread ~a complete" (node/node-name node))
              (atomic (setf (node/complete node) t)))
          :name (format nil (node/node-name node))))
       (atomic (setf (node/complete node) t))))
 
 (defmethod shutdown :before ((node node))
+  (v:info `(:node ,(node/type node))
+          "shutting down ~a" (node/node-name node))
   (atomic (setf (node/running node) nil))
   (iter:iterate
     (iter:until (node/complete node))
     (sleep .1))
   (finish-output)
   (pzmq:close (node/socket node)))
-
-(defmethod shutdown :after ((node node))
-  (let ((node-thread
-          (car
-           (remove-if-not
-            #'(lambda (th) (string= (bt:thread-name th) (node/node-name node)))
-            (bt:all-threads)))))
-    (when node-thread (bt:destroy-thread node-thread))))
 
 (defmethod complete-task ((node node))
   (send-msg (node/socket node) *mmop-v0*

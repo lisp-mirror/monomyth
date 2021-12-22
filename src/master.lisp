@@ -33,8 +33,9 @@ each type."
 
 (transactional
     (defstruct (master (:constructor build-master))
-      "the master system only has two fields, a table of worker identifiers to worker infos,
-and a table of node type symbols to node recipes"
+      "The master system has two state maps, a table of worker identifiers to worker infos,
+and a table of node type symbols to node recipes.
+It also stores the zmq context and a transnational running conditional."
       (workers (make-instance 'thash-table :test 'equal)
        :read-only t
        :transactional nil)
@@ -183,43 +184,47 @@ and a table of node type symbols to node recipes"
      (start-unsuccessful master id type-id cat msg))
 
     ((worker-task-completed-v0 id type-id)
-     (task-completed master id type-id))))
+     (task-completed master socket id type-id))))
 
 (defun send-pong-v0 (socket client-id)
   (v:debug '(:master.handler.ping) "got message (~a)" client-id)
   (send-msg socket *mmop-v0* (pong-v0 client-id))
   (v:debug '(:master.handler.ping) "sent pong"))
 
-(defun task-completed (master client-id type-id)
+(defun task-completed (master socket client-id type-id)
   "Handles a task completed message by decrementing the type count for that
 machine and incrementing the task completed count for that machine."
   (v:info :master.handler "~a task completed on ~a"
           type-id client-id)
-  (atomic
-   (let ((type-val
-           (get-ghash
-            (worker-info-type-counts (get-ghash (master-workers master) client-id))
-            type-id 0))
-         (tasks-val
-           (get-ghash
-            (worker-info-tasks-completed
-             (get-ghash (master-workers master) client-id))
-            type-id 0)))
-     (if (zerop type-val)
-         (v:error :master.handler.task-complete
-                  "task of type ~a completed with no running nodes on worker ~a"
-                  type-id client-id)
-         (setf
-          (get-ghash
-           (worker-info-type-counts
-            (get-ghash (master-workers master) client-id))
-           type-id)
-          (1- type-val)
-          (get-ghash
-           (worker-info-tasks-completed
-            (get-ghash (master-workers master) client-id))
-           type-id)
-          (1+ tasks-val))))))
+  (let ((remaining-count
+          (atomic
+           (let* ((worker (get-ghash (master-workers master) client-id))
+                  (type-val (get-ghash (worker-info-type-counts worker) type-id 0))
+                  (tasks-val (get-ghash (worker-info-tasks-completed worker) type-id 0)))
+             (if (zerop type-val)
+                 (v:error :master.handler.task-complete
+                          "task of type ~a completed with no running nodes on worker ~a"
+                          type-id client-id)
+                 (setf
+                  (get-ghash
+                   (worker-info-type-counts
+                    (get-ghash (master-workers master) client-id))
+                   type-id)
+                  (1- type-val)
+                  (get-ghash
+                   (worker-info-tasks-completed
+                    (get-ghash (master-workers master) client-id))
+                   type-id)
+                  (1+ tasks-val)))
+             (1- type-val))))
+        (recipe (atomic (get-ghash (master-recipes master) type-id))))
+    (when (and recipe (zerop remaining-count))
+      (iter:iterate
+        (iter:for worker-id in (atomic (ghash-keys (master-workers master))))
+        (iter:iterate
+          (iter:for dependent-node in (node-recipe/dependent-nodes recipe))
+          (send-msg socket *mmop-v0*
+                    (complete-task-v0 worker-id (string dependent-node))))))))
 
 (defun start-unsuccessful (master client-id type-id cat msg)
   "removes the record of the outstanding request"

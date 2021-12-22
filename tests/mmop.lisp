@@ -123,7 +123,26 @@
              (ok (string= worker-id client-name))
              (ok (string= node-type test-type)))
             (_ (fail "mmop message is of wrong type")))))))
-  
+
+  (testing "complete-task"
+    (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
+          (server-name (format nil "server-~a" (uuid:make-v4-uuid)))
+          (test-type "test-type"))
+      (pzmq:with-context nil
+        (pzmq:with-sockets ((server :router) (client :dealer))
+          (pzmq:setsockopt server :identity server-name)
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client "tcp://localhost:55555")
+          (pzmq:bind server "tcp://*:55555")
+
+          (send-msg client *mmop-v0* mmop-w:worker-ready-v0)
+          (mmop-m:pull-master-message server)
+          (send-msg server *mmop-v0* (mmop-m:complete-task-v0 client-name test-type))
+          (adt:match mmop-w:received-mmop (mmop-w:pull-worker-message client)
+            ((mmop-w:complete-task-v0 node-type)
+             (ok (string= node-type test-type)))
+            (_ (fail "mmop message is of wrong type")))))))
+
   (testing "ping"
     (let ((client-name (format nil "client-~a" (uuid:make-v4-uuid)))
           (server-name (format nil "server-~a" (uuid:make-v4-uuid))))

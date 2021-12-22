@@ -26,10 +26,10 @@
      (defclass ,(mashup-symbol name '-recipe) (rmq-node-recipe) ())
 
      (defun ,(mashup-symbol 'build- name)
-         (name fail type host port user pass)
+         (name fail node-type host port user pass)
        (make-instance
         (quote ,name)
-        :name name :fail fail :type type :batch-size ,size
+        :name name :fail fail :type node-type :batch-size ,size
         ,@(if dest-queue `(:dest ,dest-queue) '(:place-destination nil))
         ,@(if source-queue `(:source ,source-queue) '(:pull-source nil))
         :conn (setup-connection :host host :port port :username user
