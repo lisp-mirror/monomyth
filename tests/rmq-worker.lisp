@@ -108,7 +108,10 @@
     #'(lambda (node val) (declare (ignore val)) (complete-task node))
   10)
 
-(deftest worker-handles-complete-task
+;; NOTE: This creates a *ton* of excess complete-task messages.
+;; This is probably not an issue, but it does dirty up the logs some with
+;; warnings.
+(deftest worker-handles-completed-task
   (bt:make-thread
    #'(lambda ()
        (pzmq:with-context nil
@@ -140,8 +143,44 @@
                                 :password *rmq-pass*)))
     (start-worker wrkr "tcp://localhost:55555")
     (run-worker wrkr)
-    (stop-worker wrkr)
     (ok (zerop (hash-table-count (worker/nodes wrkr))))
+    (stop-worker wrkr)
+    (pass "worker stopped")))
+
+(deftest worker-handles-complete-task
+  (bt:make-thread
+   #'(lambda ()
+       (pzmq:with-context nil
+         (pzmq:with-socket master :router
+           (pzmq:bind master "tcp://*:55555")
+           (adt:match mmop-m:received-mmop (mmop-m:pull-master-message master)
+             ((mmop-m:worker-ready-v0 client-id)
+              (send-msg
+               master *mmop-v0* (mmop-m:start-node-v0 client-id (build-test-node-recipe)))
+              (adt:match mmop-m:received-mmop (mmop-m:pull-master-message master)
+                ((mmop-m:start-node-success-v0 _ ntype)
+                 (pass "node started")
+                 (send-msg master *mmop-v0* (mmop-m:complete-task-v0 client-id "TEST-NODE"))
+
+                 (adt:match mmop-m:received-mmop
+                   (mmop-m:pull-master-message master)
+                   ((mmop-m:worker-task-completed-v0 id node-type)
+                    (ok (string= client-id id))
+                    (ok (string= ntype node-type)))
+
+                   (_ (fail "unexpected message type"))))
+
+                (_ (fail "unexpected message type")))
+              (send-msg master *mmop-v0* (mmop-m:shutdown-worker-v0 client-id)))
+
+             (_ (fail "unexpected message type")))))))
+
+  (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                :password *rmq-pass*)))
+    (start-worker wrkr "tcp://localhost:55555")
+    (run-worker wrkr)
+    (ok (zerop (hash-table-count (worker/nodes wrkr))))
+    (stop-worker wrkr)
     (pass "worker stopped")))
 
 (define-rmq-node final-work-node nil 10 :source-queue queue-4 :dest-queue queue-4)

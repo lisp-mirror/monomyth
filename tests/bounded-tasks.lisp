@@ -21,8 +21,8 @@
       (queue-delete conn 1 queue-4)
       (queue-delete conn 1 "TEST-NODE1-fail")
       (queue-delete conn 1 "TEST-NODE2-fail")
-      (queue-delete conn 1 "TEST-NODE3-fail")
-    (destroy-connection conn))))
+      (queue-delete conn 1 "TEST-NODE3-fail"))
+    (destroy-connection conn)))
 
 (defvar *iter-count* 0)
 (defparameter *num-items* 7)
@@ -79,6 +79,7 @@
         #'(lambda (node item)
             (declare (ignore node))
             (ok (member (parse-integer item) results :test #'=))
+            (incf i)
             (when (= i (length results))
               (fulfill p t)))
       1 :source-queue queue-4)
@@ -109,8 +110,6 @@
 
           (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
           (test-request-success client)
-          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
-          (test-request-success client)
           (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
           (test-request-success client)
           (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE1"))
@@ -123,10 +122,9 @@
           (force *fn2-done*)
           (force *fn3-done*)
 
-          (ok (ghash-table-empty? (worker/nodes worker1)))
-          (ok (ghash-table-empty? (worker/nodes worker2)))
+          (ok (zerop (hash-table-count (worker/nodes worker1))))
+          (ok (zerop (hash-table-count (worker/nodes worker2))))
 
-          (fail "test")
 
           (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker1)))
           (test-shutdown-success client)

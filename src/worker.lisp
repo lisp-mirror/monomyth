@@ -89,12 +89,22 @@ it should be okay start a node"))
     ((start-node-v0 type recipe) (start-worker-node worker type recipe))
 
     ((node-task-completed-v0 node-type node-name)
-     (shutdown (gethash node-name (worker/nodes worker)))
-     (remhash node-name (worker/nodes worker))
-     (send-msg (worker/master-socket worker) *mmop-v0*
-               (worker-task-completed-v0 node-type)))
+     (complete-node-task worker node-type node-name))
 
     ((complete-task-v0 node-type) (complete-tasks worker node-type))))
+
+(defun complete-node-task (worker node-type node-name)
+  "when a node signals that it has completed its task it should be shutdown,
+removed from the workers state, and then the master server should be notified."
+  (let ((node (gethash node-name (worker/nodes worker))))
+    (if node
+        (progn
+          (shutdown node)
+          (remhash node-name (worker/nodes worker))
+          (send-msg (worker/master-socket worker) *mmop-v0*
+                    (worker-task-completed-v0 node-type)))
+        (v:warn :worker.complete-node-task "no node ~a found to complete" node-name)))
+  t)
 
 (defun complete-tasks (worker node-type)
   "finds all nodes with the supplied node-type and sets them to complete when
