@@ -25,7 +25,8 @@
            build-test-node1-recipe
            build-test-node2-recipe
            build-test-node3-recipe
-           build-test-node4-recipe))
+           build-test-node4-recipe
+           add-basic-example-recipes))
 (in-package :monomyth/processing-tests/utils)
 
 (defparameter *rmq-host* (uiop:getenv "TEST_PROCESSING_RMQ"))
@@ -58,7 +59,7 @@
   (declare (ignore node))
   (format nil "test ~a" item))
 
-(define-system ()
+(define-system basic-example ()
     (:name test-node1 :fn #'fn1 :batch-size 10)
     (:name test-node2 :fn #'fn2 :batch-size 10)
   (:name test-node3 :fn #'fn3 :batch-size 10)

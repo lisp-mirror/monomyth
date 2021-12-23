@@ -83,6 +83,7 @@
          (work-node (build-test-node (format nil "worknode-~d" (get-universal-time))
                                      *queue1* :work *rmq-host*
                                      *rmq-port* *rmq-user* *rmq-pass*)))
+    (add-basic-example-recipes master)
     (format t "Ready to start tests?~%")
     (read-line)
 
