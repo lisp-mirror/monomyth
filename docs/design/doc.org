@@ -149,11 +149,16 @@ constructors, and fill out the methods used by the node as well as some helper
 functions for the master server.
 
 The other macro is ~define-system~.
-At the moment this macro is very basic, and only takes a series of plists that
-should always contain a ~:name~, a ~:fn~, and a ~:batch-size~ and optionally contain
-a ~:start-fn~ and ~:stop-fn~.
+At the moment this macro is very basic, and takes a name, some optional settings values,
+and a series of plists that should always contain a ~:name~, a ~:fn~, and a
+~:batch-size~ and optionally contain a ~:start-fn~ and ~:stop-fn~.
+The settings values are ~:pull-first~ and ~:place-last~, and are ~t~ by default.
+If these values are set to ~nil~ then the first node will not pull from the data
+stream and the the last node will not place on the data stream (respectively).
 The macro then constructs the queue names in a deterministic manor, and builds the
-nodes using those queues.
+nodes using those queues, as well as a helper function called ~add-<system-name>-recipes~
+that adds all the recipe types built by the macro to a master server.
+
 Right now the nodes only work in a single, straight line, with optional support for
 not pulling from the first data stream and not placing anything on the last.
 The macro then passes the recipe into a method used by the master server at start

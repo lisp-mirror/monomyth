@@ -13,7 +13,7 @@
 (teardown
   (pzmq:ctx-destroy *test-context*))
 
-(define-system (:pull-first nil)
+(define-system tst1 (:pull-first nil)
   (:name dsl-pull-test :fn nil :batch-size 1))
 
 (deftest pull-first-key
@@ -25,7 +25,7 @@
     (ng (pull-items tnode))
     (ok (build-stub-items tnode))))
 
-(define-system (:place-last nil)
+(define-system tst2 (:place-last nil)
   (:name dsl-place-test :fn nil :batch-size 1))
 
 (deftest place-past-key
@@ -49,7 +49,7 @@
     (ng rmq-test-var)))
 
 (defvar system-test-var)
-(define-system ()
+(define-system tst3 ()
   (:name fn-system-test :batch-size 1
         :start-fn #'(lambda () (setf system-test-var t))
         :stop-fn #'(lambda () (setf system-test-var nil))))
@@ -62,7 +62,7 @@
     (shutdown tnode)
     (ng system-test-var)))
 
-(define-system ()
+(define-system tst4 ()
   (:name dep-test1 :batch-size 1)
   (:name dep-test2 :batch-size 1))
 

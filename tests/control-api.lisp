@@ -24,7 +24,7 @@
   (declare (ignore node))
   (format nil "test3 ~a" item))
 
-(define-system ()
+(define-system api ()
     (:name test-node1 :fn #'fn1 :batch-size 5)
     (:name test-node2 :fn #'fn2 :batch-size 10)
     (:name test-node3 :fn #'fn3 :batch-size 4))
@@ -53,6 +53,8 @@
         (uri (quri:uri *api-uri*)))
     (start-server *master-uri* *api-port*)
 
+    (add-api-recipes master)
+
     (setf (quri:uri-path uri) "/ping")
     (let* ((resp (multiple-value-list (dex:get uri))))
       (ok (= (nth 1 resp) 200))
@@ -65,10 +67,10 @@
 (deftest start-node-endpoint
   (let ((master (start-master 2 *master-port*))
         (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
-        (uri (quri:uri *api-uri*))
-        (recipe (build-test-node1-recipe)))
+        (uri (quri:uri *api-uri*)))
+
+    (add-api-recipes master)
     (start-server *master-uri* *api-port*)
-    (add-recipe master recipe)
 
     (testing "no workers"
       (setf (quri:uri-path uri) "/start-node/TEST-NODE1")
@@ -111,10 +113,9 @@
 (deftest stop-worker-endpoint
   (let ((master (start-master 2 *master-port*))
         (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
-        (uri (quri:uri *api-uri*))
-        (recipe (build-test-node1-recipe)))
+        (uri (quri:uri *api-uri*)))
+    (add-api-recipes master)
     (start-server *master-uri* *api-port*)
-    (add-recipe master recipe)
 
     (testing "no workers"
       (setf (quri:uri-path uri) "/stop-worker/test")
@@ -167,12 +168,10 @@
 
 (deftest recipe-info-endpoint
   (let ((master (start-master 2 *master-port*))
-        (recipe1 (build-test-node1-recipe))
-        (recipe2 (build-test-node2-recipe))
-        (recipe3 (build-test-node3-recipe))
         (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
         (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
         (uri (quri:uri *api-uri*)))
+
     (start-server *master-uri* *api-port*)
     (bt:make-thread
      #'(lambda ()
@@ -180,18 +179,14 @@
          (run-worker worker)
          (stop-worker worker)
          (pass "worker-stopped")))
-    (add-recipe master recipe1)
-    (add-recipe master recipe2)
-    (add-recipe master recipe3)
     (setf (quri:uri-path uri) "/recipe-info")
 
     (testing "no running nodes/no recipes"
       (ok (string= (dex:get uri) (to-json '()))))
 
     (testing "no running nodes/recipes"
-      (add-recipe master recipe1)
-      (add-recipe master recipe2)
-      (add-recipe master recipe3)
+      (add-api-recipes master)
+
 
       (let ((resp (multiple-value-list (dex:get uri))))
         (ok (= (nth 1 resp) 200))
@@ -253,19 +248,14 @@
 
 (deftest worker-info-endpoint
   (let* ((master (start-master 2 *master-port*))
-         (recipe1 (build-test-node1-recipe))
-         (recipe2 (build-test-node2-recipe))
-         (recipe3 (build-test-node3-recipe))
          (worker1 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
          (worker2 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
          (worker3 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
          (worker-ids `(,(worker/name worker1) ,(worker/name worker2) ,(worker/name worker3)))
          (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
          (uri (quri:uri *api-uri*)))
+    (add-api-recipes master)
     (start-server *master-uri* *api-port*)
-    (add-recipe master recipe1)
-    (add-recipe master recipe2)
-    (add-recipe master recipe3)
     (setf (quri:uri-path uri) "/worker-info")
 
     (testing "no workers running"

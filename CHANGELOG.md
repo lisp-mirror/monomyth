@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Node shutdown now attempts to kill the worker thread and wait to complete their
   last cycle before shutting down further.
+- The dsl now takes a system tame.
+- The dsl now builds an 'add-<system-name>-recipes' function that is needed to add
+  the recipes to the master server.
 
 ### Removed
 - RMQ node recipes no longer control destination and source queues, these are

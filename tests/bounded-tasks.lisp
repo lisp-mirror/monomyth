@@ -44,7 +44,7 @@
   (declare (ignore node))
   (format nil "~a" (expt (parse-integer item) 2)))
 
-(define-system (:pull-first nil)
+(define-system tasks (:pull-first nil)
   (:name test-node1 :fn #'fn1 :batch-size 1
    :stop-fn #'(lambda () (fulfill *fn1-done* t)))
   (:name test-node2 :fn #'fn2 :batch-size 1
@@ -70,12 +70,7 @@
          (i 0)
          (p (promise)))
 
-    ;; TODO: This should not be necessary (wtf?!)
-    ;; I think this has something to do with this warning from sbcl:
-    ;; redefining ADD-RECIPES (#<STRUCTURE-CLASS MONOMYTH/MASTER:MASTER>) in DEFMETHOD
-    (add-recipe master (build-test-node1-recipe))
-    (add-recipe master (build-test-node2-recipe))
-    (add-recipe master (build-test-node3-recipe))
+    (add-tasks-recipes master)
 
     (define-rmq-node checking-node
         #'(lambda (node item)

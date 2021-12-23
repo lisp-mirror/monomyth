@@ -477,7 +477,7 @@
   (declare (ignore node))
   (format nil "test1 ~a" item))
 
-(define-system ()
+(define-system node ()
     (:name full-test-node1 :fn #'fn :batch-size 1)
     (:name full-test-node2 :fn #'fn1 :batch-size 1))
 

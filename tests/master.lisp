@@ -21,7 +21,7 @@
   (declare (ignore node))
   (format nil "test3 ~a" item))
 
-(define-system ()
+(define-system master-system ()
     (:name test-node1 :fn #'fn1 :batch-size 5)
     (:name test-node2 :fn #'fn2 :batch-size 10)
     (:name test-node3 :fn #'fn3 :batch-size 4))
@@ -52,6 +52,7 @@
 
 (deftest start-stop
   (let ((master (start-master 4 55555)))
+    (add-master-system-recipes master)
     (sleep .1)
     (stop-master master)
     (pass "master-stopped"))
@@ -66,6 +67,8 @@
          (clients `(,client1-name ,client2-name ,client3-name))
          (recipe1 (build-test-node1-recipe))
          (recipe2 (build-test-node2-recipe)))
+
+    (add-master-system-recipes master)
 
     (pzmq:with-sockets (((client1 (master-context master)) :dealer)
                         ((client2 (master-context master)) :dealer)
@@ -403,6 +406,8 @@
            (worker (build-rmq-worker :host *rmq-host* :username *rmq-user*
                                      :password *rmq-pass*)))
 
+      (add-master-system-recipes master)
+
       (define-rmq-node checking-node
           #'(lambda (node item)
               (declare (ignore node))
@@ -477,6 +482,8 @@
                                       :password *rmq-pass*))
            (i 0)
            (p (promise)))
+
+      (add-master-system-recipes master)
 
       (define-rmq-node checking-node
           #'(lambda (node item)

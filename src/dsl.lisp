@@ -96,11 +96,11 @@ quite simple."
   (append (cdr (mapcar #'(lambda (val) `(,(build-node-name-key (getf val :name)))) nodes))
           '(nil)))
 
-(defmacro define-system ((&key (pull-first t) (place-last t)) &body nodes)
-  "Takes a list of plist (:name :fn :batch-size &optional :start-fn :stop-fn) and
-turns them into rmq nodes that work in sequential order.
-All recipes are also set up to be loaded into master server via the add-recipes
-method.
+(defmacro define-system (name (&key (pull-first t) (place-last t)) &body nodes)
+  "Takes a system name and a list of plist (:name :fn :batch-size &optional
+:start-fn :stop-fn) and turns them into rmq nodes that work in sequential order.
+A function called add-<system-name>-recipes is built to make it easy to add the recipes
+at start up.
 The ~:start-fn~ and ~:stop-fn~ should functions that take no arguments and are used
 to extend the node's startup and shutdown methods.
 In the system wide keys, pull-first and place-last indicate if the first node
@@ -115,8 +115,8 @@ should pull from a source queue and if the last node should place on a destinati
                   (getf node :stop-fn))))
           nodes queues (cdr queues) (build-dependents-lists nodes))
 
-       (defmethod add-recipes ((mstr master))
+       (defun ,(mashup-symbol 'add- name '-recipes) (master)
          ,@(mapcar
             #'(lambda (node)
-                `(add-recipe mstr (,(mashup-symbol 'build- (getf node :name) '-recipe))))
+                `(add-recipe master (,(mashup-symbol 'build- (getf node :name) '-recipe))))
             nodes)))))

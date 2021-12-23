@@ -3,7 +3,6 @@
         :monomyth/mmop-master :jonathan)
   (:export master
            *router-thread-name*
-           add-recipes
            start-master
            stop-master
            master-workers
@@ -47,9 +46,6 @@ It also stores the zmq context and a transnational running conditional."
        :transactional nil)
       (running t)))
 
-(defgeneric add-recipes (master)
-  (:documentation "add all recipes created by the define system macro"))
-
 (defun start-master (thread-count client-port)
   "starts up all worker threads and the router loop for load balancing"
   (v:info :master "starting master server with ~a threads listening for workers at port ~a"
@@ -60,7 +56,6 @@ It also stores the zmq context and a transnational running conditional."
              (iter:repeat thread-count)
              (iter:collect (start-handler-thread master)))))
     (start-router-loop master client-port thread-count thread-names)
-    (add-recipes master)
     master))
 
 (defun stop-master (master)
