@@ -71,6 +71,8 @@
          (p (promise)))
 
     ;; TODO: This should not be necessary (wtf?!)
+    ;; I think this has something to do with this warning from sbcl:
+    ;; redefining ADD-RECIPES (#<STRUCTURE-CLASS MONOMYTH/MASTER:MASTER>) in DEFMETHOD
     (add-recipe master (build-test-node1-recipe))
     (add-recipe master (build-test-node2-recipe))
     (add-recipe master (build-test-node3-recipe))
@@ -108,6 +110,9 @@
           (pzmq:setsockopt client :identity client-name)
           (pzmq:connect client uri)
 
+          ;; NOTE: Only start one TEST-NODE3 so that there isn't a race where the
+          ;; first node completes the promise and all others must shutdown before
+          ;; the check happens.
           (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
           (test-request-success client)
           (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
