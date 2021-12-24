@@ -117,8 +117,8 @@
 
 (defparameter *thread-name* "clack-handler-woo")
 
-(defun run-server ()
-  (start-server "localhost:7889" 17889)
+(defun run-server (master-uri port)
+  (start-server master-uri port)
 
   (handler-case
       (join-thread (find-if #'(lambda (th) (string= *thread-name* (thread-name th)))

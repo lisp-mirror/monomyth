@@ -1,7 +1,8 @@
 (defpackage monomyth/tests/control-api
   (:use :cl :rove :monomyth/control-api/main :bordeaux-threads :monomyth/mmop
    :monomyth/master :jonathan :cl-rabbit :monomyth/tests/utils :rutils.misc
-        :monomyth/rmq-node :monomyth/rmq-worker :monomyth/worker))
+        :monomyth/rmq-node :monomyth/rmq-worker :monomyth/worker
+        :monomyth/dsl))
 (in-package :monomyth/tests/control-api)
 
 (v:output-here *terminal-io*)
@@ -11,17 +12,34 @@
 (defparameter *master-port* 55555)
 (defparameter *master-uri* (format nil "tcp://127.0.0.1:~a" *master-port*))
 
+(defun fn1 (node item)
+  (declare (ignore node))
+  (format nil "test1 ~a" item))
+
+(defun fn2 (node item)
+  (declare (ignore node))
+  (format nil "test2 ~a" item))
+
+(defun fn3 (node item)
+  (declare (ignore node))
+  (format nil "test3 ~a" item))
+
+(define-system api ()
+    (:name test-node1 :fn #'fn1 :batch-size 5)
+    (:name test-node2 :fn #'fn2 :batch-size 10)
+    (:name test-node3 :fn #'fn3 :batch-size 4))
+
 (teardown
- (let ((conn (setup-connection :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
-   (with-channel (conn 1)
-     (queue-delete conn 1 "TEST-NODE1-fail")
-     (queue-delete conn 1 "TEST-NODE2-fail")
-     (queue-delete conn 1 "TEST-NODE3-fail")
-     (queue-delete conn 1 queue-1)
-     (queue-delete conn 1 queue-2)
-     (queue-delete conn 1 queue-3)
-     (queue-delete conn 1 queue-4))
-   (destroy-connection conn)))
+  (let ((conn (setup-connection :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
+    (with-channel (conn 1)
+      (queue-delete conn 1 "TEST-NODE1-fail")
+      (queue-delete conn 1 "TEST-NODE2-fail")
+      (queue-delete conn 1 "TEST-NODE3-fail")
+      (queue-delete conn 1 queue-1)
+      (queue-delete conn 1 queue-2)
+      (queue-delete conn 1 queue-3)
+      (queue-delete conn 1 queue-4))
+    (destroy-connection conn)))
 
 (deftest startup
   (let ((master (start-master 2 *master-port*)))
@@ -35,6 +53,8 @@
         (uri (quri:uri *api-uri*)))
     (start-server *master-uri* *api-port*)
 
+    (add-api-recipes master)
+
     (setf (quri:uri-path uri) "/ping")
     (let* ((resp (multiple-value-list (dex:get uri))))
       (ok (= (nth 1 resp) 200))
@@ -47,10 +67,10 @@
 (deftest start-node-endpoint
   (let ((master (start-master 2 *master-port*))
         (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
-        (uri (quri:uri *api-uri*))
-        (recipe (build-test-node1-recipe)))
+        (uri (quri:uri *api-uri*)))
+
+    (add-api-recipes master)
     (start-server *master-uri* *api-port*)
-    (add-recipe master recipe)
 
     (testing "no workers"
       (setf (quri:uri-path uri) "/start-node/TEST-NODE1")
@@ -93,10 +113,9 @@
 (deftest stop-worker-endpoint
   (let ((master (start-master 2 *master-port*))
         (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
-        (uri (quri:uri *api-uri*))
-        (recipe (build-test-node1-recipe)))
+        (uri (quri:uri *api-uri*)))
+    (add-api-recipes master)
     (start-server *master-uri* *api-port*)
-    (add-recipe master recipe)
 
     (testing "no workers"
       (setf (quri:uri-path uri) "/stop-worker/test")
@@ -149,34 +168,33 @@
 
 (deftest recipe-info-endpoint
   (let ((master (start-master 2 *master-port*))
-        (recipe1 (build-test-node1-recipe))
-        (recipe2 (build-test-node2-recipe))
-        (recipe3 (build-test-node3-recipe))
         (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
         (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
         (uri (quri:uri *api-uri*)))
+
     (start-server *master-uri* *api-port*)
-    (bt:make-thread #'(lambda ()
-                        (start-worker worker (format nil "tcp://localhost:~a" *master-port*))
-                        (run-worker worker)
-                        (stop-worker worker)
-                        (pass "worker-stopped")))
-    (add-recipe master recipe1)
-    (add-recipe master recipe2)
-    (add-recipe master recipe3)
+    (bt:make-thread
+     #'(lambda ()
+         (start-worker worker (format nil "tcp://localhost:~a" *master-port*))
+         (run-worker worker)
+         (stop-worker worker)
+         (pass "worker-stopped")))
     (setf (quri:uri-path uri) "/recipe-info")
 
     (testing "no running nodes/no recipes"
       (ok (string= (dex:get uri) (to-json '()))))
 
     (testing "no running nodes/recipes"
-      (add-recipe master recipe1)
-      (add-recipe master recipe2)
-      (add-recipe master recipe3)
+      (add-api-recipes master)
 
-      (let ((resp (multiple-value-list (dex:get uri))))
+
+      (let* ((resp (multiple-value-list (dex:get uri)))
+             (payload (parse (car resp))))
         (ok (= (nth 1 resp) 200))
-        (ok (string= (car resp) (to-json '())))))
+        (ok (= 3 (length payload)))
+        (iter:iterate
+          (iter:for item in payload)
+          (ok (equal '(:|completed| 0 :|queued| 0 :|running| 0) (getf item :|counts|))))))
 
     (testing "nodes running"
       (pzmq:with-context nil
@@ -201,13 +219,32 @@
         (ok (= (nth 1 resp) 200))
         (confirm-recipe-counts (parse (car resp)))))
 
-      (pzmq:with-context nil
-        (pzmq:with-socket client :dealer
-          (pzmq:setsockopt client :identity client-name)
-          (pzmq:connect client (format nil "tcp://localhost:~a" *master-port*))
+    (sleep .1)
 
-          (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker)))
-          (test-shutdown-success client)))
+    (testing "node completed"
+      (send-msg (worker/master-socket worker) *mmop-v0*
+                (mmop-w:worker-task-completed-v0 "TEST-NODE2"))
+      (send-msg (worker/master-socket worker) *mmop-v0*
+                (mmop-w:worker-task-completed-v0 "TEST-NODE1"))
+
+      (sleep .1)
+
+      (let* ((resp (multiple-value-list (dex:get uri)))
+             (body (parse (car resp))))
+        (ok (= (nth 1 resp) 200))
+        (iter:iterate
+          (iter:for item in body)
+          (iter:for name = (getf item :|type|))
+          (if (or (string= "TEST-NODE2" name) (string= "TEST-NODE1" name))
+              (ok (= 1 (getf (getf item :|counts|) :|completed|)))))))
+
+    (pzmq:with-context nil
+      (pzmq:with-socket client :dealer
+        (pzmq:setsockopt client :identity client-name)
+        (pzmq:connect client (format nil "tcp://localhost:~a" *master-port*))
+
+        (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker)))
+        (test-shutdown-success client)))
 
     (stop-server)
     (stop-master master)
@@ -215,25 +252,20 @@
 
 (deftest worker-info-endpoint
   (let* ((master (start-master 2 *master-port*))
-         (recipe1 (build-test-node1-recipe))
-         (recipe2 (build-test-node2-recipe))
-         (recipe3 (build-test-node3-recipe))
          (worker1 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
          (worker2 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
          (worker3 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
          (worker-ids `(,(worker/name worker1) ,(worker/name worker2) ,(worker/name worker3)))
          (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
          (uri (quri:uri *api-uri*)))
+    (add-api-recipes master)
     (start-server *master-uri* *api-port*)
-    (add-recipe master recipe1)
-    (add-recipe master recipe2)
-    (add-recipe master recipe3)
     (setf (quri:uri-path uri) "/worker-info")
 
     (testing "no workers running"
-             (let ((resp (multiple-value-list (dex:get uri))))
-               (ok (= (nth 1 resp) 200))
-               (ok (string= (car resp) (to-json '())))))
+      (let ((resp (multiple-value-list (dex:get uri))))
+        (ok (= (nth 1 resp) 200))
+        (ok (string= (car resp) (to-json '())))))
 
     (bt:make-thread #'(lambda ()
                         (start-worker worker1 (format nil "tcp://localhost:~a" *master-port*))
@@ -254,47 +286,48 @@
     (sleep .1)
 
     (testing "workers running, no recipes"
-             (let* ((resp (multiple-value-list (dex:get uri)))
-                    (body (parse (car resp))))
-               (ok (= (nth 1 resp) 200))
-               (iter:iterate
-                (iter:for worker-info in body)
-                (ok (member (getf worker-info :|worker_id|) worker-ids :test #'string=))
-                (ok (equal (getf worker-info :|nodes|) '())))))
+      (let* ((resp (multiple-value-list (dex:get uri)))
+             (body (parse (car resp))))
+        (ok (= (nth 1 resp) 200))
+        (iter:iterate
+          (iter:for worker-info in body)
+          (ok (member (getf worker-info :|worker_id|) worker-ids :test #'string=))
+          (ok (equal (getf worker-info :|nodes|) '())))))
 
-    (pzmq:with-context nil
-      (pzmq:with-socket client :dealer
-        (pzmq:setsockopt client :identity client-name)
-        (pzmq:connect client (format nil "tcp://localhost:~a" *master-port*))
+    (testing "started nodes"
+      (pzmq:with-context nil
+        (pzmq:with-socket client :dealer
+          (pzmq:setsockopt client :identity client-name)
+          (pzmq:connect client (format nil "tcp://localhost:~a" *master-port*))
 
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
-        (test-request-success client)
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
-        (test-request-success client)
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
-        (test-request-success client)
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
-        (test-request-success client)
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE1"))
-        (test-request-success client)
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
-        (test-request-success client)
-        (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
-        (test-request-success client)))
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
+          (test-request-success client)
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
+          (test-request-success client)
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
+          (test-request-success client)
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
+          (test-request-success client)
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE1"))
+          (test-request-success client)
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE3"))
+          (test-request-success client)
+          (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
+          (test-request-success client)))
 
-    (sleep .1)
+      (sleep .1)
 
-    (let* ((resp (multiple-value-list (dex:get uri)))
-           (body (parse (car resp)))
-           (counts (reduce
-                    #'(lambda (acc val)
-                        (fset:map-union
-                         acc (node-count-plist-to-map (getf val :|nodes|)) #'add-node-count))
-                    body :initial-value (fset:empty-map))))
-      (ok (= (nth 1 resp) 200))
-      (ok (= (fset:lookup counts "TEST-NODE1") 1))
-      (ok (= (fset:lookup counts "TEST-NODE2") 2))
-      (ok (= (fset:lookup counts "TEST-NODE3") 4)))
+      (let* ((resp (multiple-value-list (dex:get uri)))
+             (body (parse (car resp)))
+             (counts (reduce
+                      #'(lambda (acc val)
+                          (fset:map-union
+                           acc (node-count-plist-to-map (getf val :|nodes|)) #'add-node-count))
+                      body :initial-value (fset:empty-map))))
+        (ok (= (nth 1 resp) 200))
+        (ok (= (fset:lookup counts "TEST-NODE1") 1))
+        (ok (= (fset:lookup counts "TEST-NODE2") 2))
+        (ok (= (fset:lookup counts "TEST-NODE3") 4))))
 
     (stop-server)
     (stop-master master)

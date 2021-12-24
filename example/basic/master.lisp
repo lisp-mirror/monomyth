@@ -25,7 +25,13 @@
 (defparameter *recipe4* (build-test-node4-recipe))
 (defparameter *recipes* `(,*recipe1* ,*recipe2* ,*recipe3* ,*recipe4*))
 
+(defvar *test-context*)
+
+(setup
+  (setf *test-context* (pzmq:ctx-new)))
+
 (teardown
+  (pzmq:ctx-destroy *test-context*)
   (let ((conn (setup-connection :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
     (with-channel (conn 1)
       (queue-delete conn 1 "TEST-NODE1-fail")
@@ -46,9 +52,9 @@
 
 (defun send-test-messages ()
   (let ((work-node (build-test-node (format nil "worknode-~d" (get-universal-time))
-                                    *queue1* *queue1* *queue1* :work 10 *rmq-host*
+                                    *queue1* :work *rmq-host*
                                     *rmq-port* *rmq-user* *rmq-pass*)))
-    (startup work-node nil)
+    (startup work-node *test-context* nil nil)
     (let ((msgs (iter:iterate
                   (iter:repeat *number-of-test-msgs*)
                   (iter:for msg = (generate-test-msg *length-of-test-msgs*))
@@ -75,8 +81,9 @@
          (test-msgs (send-test-messages))
          (expected-result (mapcar #'calculate-result-messge test-msgs))
          (work-node (build-test-node (format nil "worknode-~d" (get-universal-time))
-                                     *queue5* *queue1* *queue1* :work 10 *rmq-host*
+                                     *queue1* :work *rmq-host*
                                      *rmq-port* *rmq-user* *rmq-pass*)))
+    (add-basic-example-recipes master)
     (format t "Ready to start tests?~%")
     (read-line)
 
@@ -103,9 +110,9 @@
           (iter:for worker-id in (ghash-keys (master-workers master)))
           (send-msg control *mmop-v0* (mmop-c:stop-worker-request-v0 worker-id)))))
 
-    (startup work-node nil)
+    (startup work-node *test-context* nil nil)
     (labels ((get-msg-w-restart ()
-               (handler-case (get-message work-node)
+               (handler-case (car (pull-items work-node))
                  (rabbitmq-error (c)
                    (declare (ignore c))
                    (sleep .1)

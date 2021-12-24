@@ -5,14 +5,14 @@ exec ros -Q -- $0 "$@"
 |#
 (progn ;;init forms
   (ros:ensure-asdf)
-  #+quicklisp(ql:quickload '(:rove))
+  #+quicklisp(ql:quickload '(:monomyth/map-reduce-example))
   )
 
-(defpackage :ros.script.example-worker.3814030946
+(defpackage :ros.script.run-map-reduce.3849350311
   (:use :cl))
-(in-package :ros.script.example-worker.3814030946)
+(in-package :ros.script.run-map-reduce.3849350311)
 
 (defun main (&rest argv)
   (declare (ignorable argv))
-  (if (rove:run :monomyth/basic-example-worker) 0 1))
+  (monomyth/map-reduce/main:run))
 ;;; vim: set ft=lisp lisp:

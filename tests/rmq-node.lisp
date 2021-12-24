@@ -1,19 +1,25 @@
 (defpackage monomyth/tests/rmq-node
   (:use :cl :rove :monomyth/node :monomyth/rmq-node :cl-mock :cl-rabbit :stmx
-        :monomyth/tests/utils)
+        :monomyth/tests/utils :monomyth/dsl)
   (:shadow :closer-mop))
 (in-package :monomyth/tests/rmq-node)
 
 (v:output-here *terminal-io*)
 (defparameter *fail-queue* (format nil "test-fail-~d" (get-universal-time)))
-(defparameter *final-queue* (format nil "test-final-~d" (get-universal-time)))
+(defvar *test-context*)
+
+(setup
+  (setf *test-context* (pzmq:ctx-new)))
 
 (teardown
+  (pzmq:ctx-destroy *test-context*)
   (let ((conn (setup-connection :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
     (with-channel (conn 1)
       (queue-delete conn 1 *source-queue*)
       (queue-delete conn 1 *dest-queue*)
-      (queue-delete conn 1 *final-queue*)
+      (queue-delete conn 1 *full-queue1*)
+      (queue-delete conn 1 *full-queue2*)
+      (queue-delete conn 1 *full-queue3*)
       (queue-delete conn 1 *fail-queue*))
     (destroy-connection conn)))
 
@@ -22,16 +28,14 @@
     (let ((pulling-node
             (build-test-node
              (format nil "test-rmq-node-~d" (get-universal-time))
-             *source-queue* *dest-queue* *fail-queue* :test 1 *rmq-host*
-             *rmq-port* *rmq-user* *rmq-pass*))
+             *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
           (sending-node
-            (build-test-node
+            (build-work-node
              (format nil "test-rmq-node-1-~d" (get-universal-time))
-             *dest-queue* *source-queue* *fail-queue* :test 10 *rmq-host*
-             *rmq-port* *rmq-user* *rmq-pass*))
+             *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
           (test-msg (format nil "test-~d" (get-universal-time))))
-      (startup pulling-node nil)
-      (startup sending-node nil)
+      (startup pulling-node *test-context* "inproc://test" nil)
+      (startup sending-node *test-context* "inproc://test" nil)
 
       (ok (eql (send-message sending-node *source-queue* test-msg) :amqp-status-ok))
       (sleep .1)
@@ -46,9 +50,8 @@
     (let ((pulling-node
             (build-test-node
              (format nil "test-rmq-node-~d" (get-universal-time))
-             *source-queue* *dest-queue* *fail-queue* :test 1 *rmq-host*
-             *rmq-port* *rmq-user* *rmq-pass*)))
-      (startup pulling-node nil)
+             *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
+      (startup pulling-node *test-context* "inproc://test" nil)
       (ok (signals (get-message pulling-node) 'rabbitmq-library-error))
       (shutdown pulling-node))))
 
@@ -56,15 +59,13 @@
   (let ((pulling-node
           (build-test-node
            (format nil "test-rmq-node-~d" (get-universal-time))
-           *source-queue* *dest-queue* *fail-queue* :test 1 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
         (sending-node
-          (build-test-node
+          (build-work-node
            (format nil "test-rmq-node-1-~d" (get-universal-time))
-           *dest-queue* *source-queue* *fail-queue* :test 10 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*)))
-    (startup pulling-node nil)
-    (startup sending-node nil)
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
+    (startup pulling-node *test-context* "inproc://test" nil)
+    (startup sending-node *test-context* "inproc://test" nil)
 
     (testing "requeue"
       (let ((test-msg (format nil "test-~d" (get-universal-time))))
@@ -95,17 +96,15 @@
 
 (deftest pull-messages
   (let ((pulling-node
-          (build-test-node
+          (build-large-test-node
            (format nil "test-rmq-node-~d" (get-universal-time))
-           *source-queue* *dest-queue* *fail-queue* :test 1 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
         (sending-node
-          (build-test-node
+          (build-work-node
            (format nil "test-rmq-node-1-~d" (get-universal-time))
-           *dest-queue* *source-queue* *fail-queue* :test 10 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*)))
-    (startup pulling-node nil)
-    (startup sending-node nil)
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
+    (startup pulling-node *test-context* "inproc://test" nil)
+    (startup sending-node *test-context* "inproc://test" nil)
 
     (testing "full batch"
       (iter:iterate
@@ -137,20 +136,47 @@
     (shutdown pulling-node)
     (shutdown sending-node)))
 
+(define-rmq-node dont-pull-test #'identity-fn 8 :dest-queue *dest-queue*)
+
+(deftest dont-pull-messages
+  (let ((sending-node
+          (build-dont-pull-test
+           (format nil "test-rmq-node-~d" (get-universal-time))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
+        (pulling-node
+          (build-work-node
+           (format nil "test-rmq-node-~d" (get-universal-time))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
+
+    (startup sending-node *test-context* "inproc://test" nil)
+    (startup pulling-node *test-context* "inproc://test" nil)
+
+    (run-iteration sending-node)
+
+    (sleep .1)
+
+    (let ((items (pull-items pulling-node)))
+      (ok (= (length items) (node/batch-size sending-node)))
+      (iter:iterate
+        (iter:for item in items)
+        (ok (string= "STUB-ITEM" (rmq-message-body item)))
+        (ack-message pulling-node item)))
+
+    (shutdown pulling-node)
+    (shutdown sending-node)))
+
 (deftest transform-items-success
   (let ((pulling-node
-          (build-test-node
+          (build-large-test-node
            (format nil "test-rmq-node-~d" (get-universal-time))
-           *source-queue* *dest-queue* *fail-queue* :test 1 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
         (sending-node
-          (build-test-node
+          (build-work-node
            (format nil "test-rmq-node-1-~d" (get-universal-time))
-           *dest-queue* *source-queue* *fail-queue* :test 10 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
         (items '("1" "2" "3" "4" "5" "6" "7" "8" "9" "10")))
-    (startup pulling-node nil)
-    (startup sending-node nil)
+    (startup pulling-node *test-context* "inproc://test" nil)
+    (startup sending-node *test-context* "inproc://test" nil)
 
     (iter:iterate
       (iter:for item in items)
@@ -187,13 +213,12 @@
            (format nil "test-rmq-node-~d" (get-universal-time))
            *source-queue* *dest-queue* *fail-queue* 10))
         (sending-node
-          (build-test-node
+          (build-work-node
            (format nil "test-rmq-node-1-~d" (get-universal-time))
-           *dest-queue* *source-queue* *fail-queue* :test 10 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
         (items `("1" "2" "3" "4" "5" "6" "7" "8" "9" "10")))
-    (startup pulling-node nil)
-    (startup sending-node nil)
+    (startup pulling-node *test-context* "inproc://test" nil)
+    (startup sending-node *test-context* "inproc://test" nil)
 
     (iter:iterate
       (iter:for item in items)
@@ -219,18 +244,16 @@
 (deftest place-items
   (testing "happy path"
     (let ((pulling-node
-            (build-test-node
+            (build-large-test-node
              (format nil "test-rmq-node-~d" (get-universal-time))
-             *source-queue* *dest-queue* *fail-queue* :test 10 *rmq-host*
-             *rmq-port* *rmq-user* *rmq-pass*))
+             *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
           (sending-node
-            (build-test-node
+            (build-work-node
              (format nil "test-rmq-node-1-~d" (get-universal-time))
-             *dest-queue* *source-queue* *fail-queue* :test 10 *rmq-host*
-             *rmq-port* *rmq-user* *rmq-pass*))
+             *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
           (items `("1" "2" "3" "4" "5" "6" "7" "8" "9" "10")))
-      (startup pulling-node nil)
-      (startup sending-node nil)
+      (startup pulling-node *test-context* "inproc://test" nil)
+      (startup sending-node *test-context* "inproc://test" nil)
 
       (iter:iterate
         (iter:for item in items)
@@ -258,6 +281,37 @@
 
     (skip "ack failure")))
 
+(deftest dont-place-items
+  (let* ((items `("1" "2" "3" "4" "5" "6" "7" "8" "9" "10"))
+         (i 0))
+    (flet ((check-fn (node item)
+             (declare (ignore node))
+             (ok (string= item (nth i items)))
+             (incf i)))
+      (define-rmq-node no-place #'check-fn 10 :source-queue *source-queue*)
+      (let ((sending-node
+              (build-work-node
+               (format nil "test-rmq-node-1-~d" (get-universal-time))
+               *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
+            (pulling-node
+              (build-no-place "no place node" *fail-queue* :no-place
+                              *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
+        (startup pulling-node *test-context* "inproc://test" nil)
+        (startup sending-node *test-context* "inproc://test" nil)
+
+        (iter:iterate
+          (iter:for item in items)
+          (send-message sending-node *source-queue* item))
+        (sleep .1)
+
+        (run-iteration pulling-node)
+
+        (ng (pull-items pulling-node))
+        (ng (pull-items sending-node))
+
+        (shutdown pulling-node)
+        (shutdown sending-node)))))
+
 (defmacro test-handle-failure (step-name step)
   `(testing ,(format nil "~a send successful" step-name)
      (iter:iterate
@@ -278,19 +332,19 @@
            (ok (string= (rmq-message-body final-item) (rmq-message-body got-item)))
            (ack-message sending-node final-item))))))
 
+(define-rmq-node fail-work-node nil 10 :source-queue *fail-queue* :dest-queue *source-queue*)
+
 (deftest handle-failure
   (let ((pulling-node
-          (build-test-node
+          (build-large-test-node
            (format nil "test-rmq-node-~d" (get-universal-time))
-           *source-queue* *dest-queue* *fail-queue* :test 5 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
         (sending-node
-          (build-test-node
+          (build-fail-work-node
            (format nil "test-rmq-node-1-~d" (get-universal-time))
-           *fail-queue* *source-queue* *fail-queue* :test 10 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*)))
-    (startup pulling-node nil)
-    (startup sending-node nil)
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
+    (startup pulling-node *test-context* "inproc://test" nil)
+    (startup sending-node *test-context* "inproc://test" nil)
 
     (testing "unexpected step"
       (ok (signals (handle-failure pulling-node :bad nil) 'simple-error)))
@@ -311,19 +365,17 @@
     (shutdown sending-node)))
 
 (deftest full-node-path-success
-  (let ((pulling-node
+  (let ((test-items '("1" "2" "3" "4" "5"))
+        (pulling-node
           (build-test-node
            (format nil "test-rmq-node-~d" (get-universal-time))
-           *source-queue* *dest-queue* *fail-queue* :test 5 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
         (sending-node
-          (build-test-node
+          (build-work-node
            (format nil "test-rmq-node-1-~d" (get-universal-time))
-           *dest-queue* *source-queue* *fail-queue* :test 10 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*))
-        (test-items '("1" "2" "3" "4" "5")))
-    (startup pulling-node nil)
-    (startup sending-node nil)
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
+    (startup pulling-node *test-context* "inproc://test" nil)
+    (startup sending-node *test-context* "inproc://test" nil)
 
     (iter:iterate
       (iter:for item in test-items)
@@ -350,15 +402,13 @@
   (let ((pulling-node
           (build-test-node
            (format nil "test-rmq-node-~d" (get-universal-time))
-           *source-queue* *dest-queue* *fail-queue* :test 5 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
         (sending-node
-          (build-test-node
+          (build-fail-work-node
            (format nil "test-rmq-node-1-~d" (get-universal-time))
-           *fail-queue* *source-queue* *fail-queue* :test 10 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*)))
-    (startup pulling-node nil)
-    (startup sending-node nil)
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
+    (startup pulling-node *test-context* "inproc://test" nil)
+    (startup sending-node *test-context* "inproc://test" nil)
 
     (testing "pull fail"
       (iter:iterate
@@ -419,30 +469,45 @@
     (shutdown pulling-node)
     (shutdown sending-node)))
 
+(defun fn (node item)
+  (declare (ignore node))
+  (format nil "test ~a" item))
+
+(defun fn1 (node item)
+  (declare (ignore node))
+  (format nil "test1 ~a" item))
+
+(define-system node ()
+    (:name full-test-node1 :fn #'fn :batch-size 1)
+    (:name full-test-node2 :fn #'fn1 :batch-size 1))
+
+(defparameter *full-queue1* "START-to-FULL-TEST-NODE1")
+(defparameter *full-queue2* "FULL-TEST-NODE1-to-FULL-TEST-NODE2")
+(defparameter *full-queue3* "FULL-TEST-NODE2-to-END")
+
+(define-rmq-node final-work-node nil 5 :source-queue *full-queue3* :dest-queue *full-queue1*)
+
 (deftest full-node-path-success-two-nodes
   (let ((pulling-node
-          (build-test-node
+          (build-full-test-node1
            (format nil "test-rmq-node-~d" (get-universal-time))
-           *source-queue* *dest-queue* *fail-queue* :test 1 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
         (second-node
-          (build-test-node1
+          (build-full-test-node2
            (format nil "test-rmq-node-~d" (get-universal-time))
-           *dest-queue* *final-queue* *fail-queue* :test 1 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
         (sending-node
-          (build-test-node
+          (build-final-work-node
            (format nil "test-rmq-node-1-~d" (get-universal-time))
-           *final-queue* *source-queue* *fail-queue* :test 10 *rmq-host*
-           *rmq-port* *rmq-user* *rmq-pass*))
+           *fail-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
         (test-items '("1" "2" "3" "4" "5")))
-    (startup pulling-node nil)
-    (startup sending-node nil)
-    (startup second-node nil)
+    (startup pulling-node *test-context* "inproc://test" nil)
+    (startup sending-node *test-context* "inproc://test" nil)
+    (startup second-node *test-context* "inproc://test" nil)
 
     (iter:iterate
       (iter:for item in test-items)
-      (send-message sending-node *source-queue* item))
+      (send-message sending-node *full-queue1* item))
     (sleep .1)
 
     (iter:iterate

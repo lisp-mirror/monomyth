@@ -1,8 +1,8 @@
 (defpackage monomyth/node-recipe
   (:use :cl :uuid)
   (:export node-recipe
-           node-recipe/batch-size
            node-recipe/type
+           node-recipe/dependent-nodes
            name-node
            serialize-recipe
            deserialize-recipe))
@@ -16,11 +16,11 @@
          :initarg :type
          :initform (error "recipe type must be set")
          :documentation "node 'type', often used to name nodes")
-   (batch-size :reader node-recipe/batch-size
-               :initform 10
-               :initarg :batch-size
-               :documentation "the batch size that is passed directly to the node
-if not set uses the default (10)"))
+   (dependent-nodes
+    :reader node-recipe/dependent-nodes
+    :initarg :dependent-nodes
+    :initform nil
+    :documentation "all nodes that use the output of nodes created by this recipe"))
   (:documentation "everything the systems needs to make a new node"))
 
 (defmethod name-node ((recipe node-recipe))

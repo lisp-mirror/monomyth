@@ -2,6 +2,8 @@
   (:use :cl :monomyth/node :cl-rabbit :stmx)
   (:shadow :closer-mop)
   (:export rmq-node
+           rmq-node/source-queue
+           rmq-node/dest-queue
            setup-connection
            build-rmq-message
            rmq-message-body
@@ -29,11 +31,11 @@ Due to the library we are using, there will be one per node")
                  :reader rmq-node/exchange)
        (source-queue :initarg :source
                      :transactional nil
-                     :initform (error "source queue must be set")
+                     :initform nil
                      :reader rmq-node/source-queue)
        (dest-queue :initarg :dest
+                   :initform nil
                    :transactional nil
-                   :initform (error "destination queue must be set")
                    :reader rmq-node/dest-queue)
        (fail-queue :initarg :fail
                    :transactional nil
@@ -59,7 +61,8 @@ Due to the library we are using, there will be one per node")
      (rabbitmq-library-error (c) (build-error-response ,step ,items c))))
 
 (defun setup-connection
-    (&key (host "localhost") (port 5672) (username "guest") (password "guest") (vhost "/"))
+    (&key (host "localhost") (port 5672) (username "guest") (password "guest")
+       (vhost "/"))
   "builds a new connection, sets up the socket, and logs in
 defaults are the local rabbit-mq defaults"
   (rabbit-mq-call
@@ -69,7 +72,7 @@ defaults are the local rabbit-mq defaults"
      (login-sasl-plain conn vhost username password)
      conn)))
 
-(defmethod startup ((node rmq-node) &optional build-worker-thread)
+(defmethod startup ((node rmq-node) context worker-address &optional build-worker-thread)
   "opens a channel using the nodes connections after setting up the socket.
 also ensures all three queues are up and sets up basic consume for the source queue"
   (declare (ignore build-worker-thread))
@@ -77,14 +80,17 @@ also ensures all three queues are up and sets up basic consume for the source qu
    :startup
    (progn
      (channel-open (rmq-node/conn node) *channel*)
-     (queue-declare (rmq-node/conn node) *channel*
-                    :queue (rmq-node/source-queue node))
-     (queue-declare (rmq-node/conn node) *channel*
-                    :queue (rmq-node/dest-queue node))
+     (when (rmq-node/source-queue node)
+       (queue-declare (rmq-node/conn node) *channel*
+                      :queue (rmq-node/source-queue node)))
+     (when (rmq-node/dest-queue node)
+       (queue-declare (rmq-node/conn node) *channel*
+                      :queue (rmq-node/dest-queue node)))
      (queue-declare (rmq-node/conn node) *channel*
                     :queue (rmq-node/fail-queue node))
-     (basic-consume (rmq-node/conn node) *channel*
-                    (rmq-node/source-queue node)))))
+     (when (rmq-node/source-queue node)
+       (basic-consume (rmq-node/conn node) *channel*
+                      (rmq-node/source-queue node))))))
 
 (defmethod shutdown ((node rmq-node))
   "closes the channel and then destroys the connections.
@@ -119,6 +125,9 @@ return :success t with the :result if things go well"
   (basic-nack (rmq-node/conn node) *channel*
               (rmq-message-delivery-tag message) :requeue requeue))
 
+(defmethod build-stub-item ((node rmq-node))
+  (build-rmq-message :body *stub-message*))
+
 (defmethod pull-items ((node rmq-node))
   (iter:iterate
     (iter:finally (return items))
@@ -128,6 +137,13 @@ return :success t with the :result if things go well"
         (if (string= (rabbitmq-library-error/error-description c) "request timed out")
             (return-from pull-items items)
             (build-error-response :pull items c))))))
+
+(defmethod remove-empty-messages ((node rmq-node) items)
+  (iter:iterate
+    (iter:for item in items)
+    (if (zerop (length (rmq-message-body item)))
+        (ack-message node item)
+        (iter:collect item))))
 
 (defmethod transform-items ((node rmq-node) pulled)
   (handler-case
@@ -149,8 +165,10 @@ return :success t with the :result if things go well"
     (rabbit-mq-call
      :place
      (progn
-       (send-message node (rmq-node/dest-queue node) (rmq-message-body item))
-       (ack-message node item))
+       (when (node/place-destination node)
+         (send-message node (rmq-node/dest-queue node) (rmq-message-body item)))
+       (when (rmq-message-delivery-tag item)
+         (ack-message node item)))
      (nthcdr i result))))
 
 (defmethod handle-failure ((node rmq-node) step result)
@@ -158,8 +176,14 @@ return :success t with the :result if things go well"
       (iter:iterate
         (iter:for item in result)
         (handler-case
-            (progn (send-message node (rmq-node/fail-queue node) (rmq-message-body item))
-                   (nack-message node item nil))
+            (progn
+              (send-message node (rmq-node/fail-queue node) (rmq-message-body item))
+              ;; NOTE: not all failures result in a 'valid' message, that is a message
+              ;; that came from rmq.
+              ;; In this case we can just drop it on the floor.
+              ;; TODO: test this code path
+              (when (rmq-message-delivery-tag item)
+                (nack-message node item nil)))
           (rabbitmq-library-error (c)
             (v:error :node.event-loop "rmq-error- failed to place item (~d): ~a"
                        (rabbitmq-library-error/error-code c)

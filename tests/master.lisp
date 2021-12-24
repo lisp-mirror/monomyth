@@ -1,15 +1,42 @@
 (defpackage monomyth/tests/master
   (:use :cl :rove :monomyth/master :monomyth/mmop :monomyth/rmq-node-recipe :stmx.util
         :monomyth/node-recipe :monomyth/worker :cl-rabbit :monomyth/rmq-node :monomyth/node
-   :monomyth/rmq-worker :stmx :monomyth/tests/utils)
+   :monomyth/rmq-worker :stmx :monomyth/tests/utils :monomyth/dsl
+   :lparallel)
   (:shadow :closer-mop))
 (in-package :monomyth/tests/master)
 
-(defparameter *test-process-time* 5)
 (v:output-here *terminal-io*)
+(defvar *test-context*)
+
+(defun fn1 (node item)
+  (declare (ignore node))
+  (format nil "test1 ~a" item))
+
+(defun fn2 (node item)
+  (declare (ignore node))
+  (format nil "test2 ~a" item))
+
+(defun fn3 (node item)
+  (declare (ignore node))
+  (format nil "test3 ~a" item))
+
+(define-system master-system ()
+    (:name test-node1 :fn #'fn1 :batch-size 5)
+    (:name test-node2 :fn #'fn2 :batch-size 10)
+    (:name test-node3 :fn #'fn3 :batch-size 4))
+
+(define-rmq-node final-work-node nil 10 :source-queue queue-4 :dest-queue queue-4)
+
+(define-rmq-node final-work-node1 nil 10 :source-queue queue-3 :dest-queue queue-3)
+
+(setup
+  (setf *test-context* (pzmq:ctx-new)))
 
 (teardown
-  (let ((conn (setup-connection :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
+  (pzmq:ctx-destroy *test-context*)
+  (let ((conn (setup-connection :host *rmq-host* :username *rmq-user*
+                                :password *rmq-pass*)))
     (with-channel (conn 1)
       (queue-delete conn 1 *source-queue*)
       (queue-delete conn 1 *dest-queue*)
@@ -25,6 +52,7 @@
 
 (deftest start-stop
   (let ((master (start-master 4 55555)))
+    (add-master-system-recipes master)
     (sleep .1)
     (stop-master master)
     (pass "master-stopped"))
@@ -39,6 +67,8 @@
          (clients `(,client1-name ,client2-name ,client3-name))
          (recipe1 (build-test-node1-recipe))
          (recipe2 (build-test-node2-recipe)))
+
+    (add-master-system-recipes master)
 
     (pzmq:with-sockets (((client1 (master-context master)) :dealer)
                         ((client2 (master-context master)) :dealer)
@@ -156,7 +186,32 @@
             (test-resonses master client2-name c2-expected-results)
             (test-resonses master client3-name c3-expected-results)))
 
-        (testing "stop-worker"
+        (testing "task complete"
+          (iter:iterate
+            (iter:for name in (find-active-workers master))
+            (iter:for client = (get-socket `(,client1 ,client2 ,client3) name))
+            (test-task-complete master client name)))
+
+        (testing "complete task message sent"
+          (test-complete-task-msg client1)
+          (test-complete-task-msg client2)
+          (test-complete-task-msg client3))
+
+        (testing "task complete-failed"
+          (flet ((get-count ()
+                   (atomic
+                    (get-ghash (worker-info-type-counts
+                                (get-ghash (master-workers master) client3-name))
+                               "TEST-NODE4" :none))))
+            (let ((old-count (get-count)))
+              (send-msg client1 *mmop-v0*
+                        (mmop-w:worker-task-completed-v0 "TEST-NODE4"))
+              (sleep .1)
+
+              (ok (eq old-count (get-count)))
+              (ok (eq :none (get-count))))))
+
+        (testing "stop worker"
           (pzmq:with-context nil
             (pzmq:with-socket client :dealer
               (pzmq:setsockopt client :identity client-name)
@@ -179,6 +234,43 @@
                 (_ (fail "unexpected message type"))))))))
 
     (stop-master master)))
+
+(defun get-socket (sockets name)
+  (find-if
+   #'(lambda (val) (string= name (pzmq:getsockopt val :identity)))
+   sockets))
+
+(defun test-task-complete (master client name)
+  (flet ((get-count ()
+           (atomic
+            (get-ghash (worker-info-type-counts
+                        (get-ghash (master-workers master) name))
+                       "TEST-NODE2"))))
+    (let ((old-count (get-count)))
+      (send-msg client *mmop-v0*
+                (mmop-w:worker-task-completed-v0 "TEST-NODE2"))
+      (sleep .1)
+
+      (ok (= (1- old-count) (get-count)))
+      (ok (= 1 (atomic
+                (get-ghash (worker-info-tasks-completed
+                            (get-ghash (master-workers master) name))
+                           "TEST-NODE2")))))))
+
+(defun test-complete-task-msg (client)
+  (adt:match mmop-w:received-mmop (mmop-w:pull-worker-message client)
+    ((mmop-w:complete-task-v0 sent-node-id)
+     (ok (string= sent-node-id "TEST-NODE3")))
+    (_ (fail "unexpected message type"))))
+
+(defun find-active-workers (master)
+  (remove-if
+   #'(lambda (val)
+       (zerop (atomic (get-ghash
+                       (worker-info-type-counts
+                        (get-ghash (master-workers master) val))
+                       "TEST-NODE2" 0))))
+   (atomic (ghash-keys (master-workers master)))))
 
 (defun test-client-recieves-start-node (socket type-id recipe)
   (adt:match mmop-w:received-mmop (mmop-w:pull-worker-message socket)
@@ -204,11 +296,18 @@
 (defun respond-to-reqs (socket reqs results-table)
   (iter:iterate
     (iter:for req in reqs)
-    (iter:for msg = (if (zerop (random 2))
-                        (progn
-                          (incf (gethash req results-table 0))
-                          (mmop-w:start-node-success-v0 req))
-                        (mmop-w:start-node-failure-v0 req "test" "test")))
+    (iter:for msg = (cond
+                      ((string= "TEST-NODE2" req)
+                       (progn
+                         (incf (gethash req results-table 0))
+                         (mmop-w:start-node-success-v0 req)))
+
+                      ((zerop (random 2))
+                       (progn
+                         (incf (gethash req results-table 0))
+                         (mmop-w:start-node-success-v0 req)))
+
+                      (t (mmop-w:start-node-failure-v0 req "test" "test"))))
     (send-msg socket *mmop-v0* msg)))
 
 (defun test-resonses (master client-id expected-results)
@@ -224,31 +323,49 @@
 
 (deftest process-data-rmq
   (testing "one worker - one node"
-    (let ((work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *source-queue* *dest-queue* *dest-queue* :work 10 *rmq-host*
-                             *rmq-port* *rmq-user* *rmq-pass*))
-          (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
-      (startup work-node nil)
+    (let* ((work-node
+             (build-test-node
+              (format nil "worknode-~d" (get-universal-time))
+              *dest-queue* :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
+           (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed"))
+           (client-port 55555)
+           (uri (format nil "tcp://localhost:~a" client-port))
+           (client-name (format nil "node-client-~a" (uuid:make-v4-uuid)))
+           (recipe1 (build-test-node-recipe))
+           (i 0)
+           (p (promise))
+           (master (start-master 2 client-port))
+           (worker (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                     :password *rmq-pass*)))
+
+      (define-rmq-node checking-node
+          #'(lambda (node item)
+              (declare (ignore node))
+              (ok (string= (format nil "test ~a" (nth i items)) item))
+              (incf i)
+              (when (= i (length items))
+                (fulfill p t)))
+        1 :source-queue *dest-queue*)
+
+      (startup work-node *test-context* "inproc://test" nil)
       (iter:iterate
         (iter:for item in items)
         (send-message work-node *source-queue* item))
       (shutdown work-node)
 
-      (let* ((client-port 55555)
-             (uri (format nil "tcp://localhost:~a" client-port))
-             (client-name (format nil "node-client-~a" (uuid:make-v4-uuid)))
-             (recipe1 (build-test-node-recipe))
-             (master (start-master 2 client-port))
-             (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
+      (let ((check-node (build-checking-node
+                         "check node" queue-4 :check
+                         *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
         (bt:make-thread #'(lambda ()
                             (start-worker worker uri)
                             (run-worker worker)
+                            (sleep .1)
                             (stop-worker worker)
                             (pass "worker-stopped")))
 
         (sleep .1)
         (add-recipe master recipe1)
+        (startup check-node *test-context* "inproc://test")
 
         (pzmq:with-context nil
           (pzmq:with-socket client :dealer
@@ -257,59 +374,67 @@
             (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE"))
             (test-request-success client)
 
-            (sleep *test-process-time*)
+            (force p)
 
             (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker)))
             (test-shutdown-success client)))
 
-        (stop-master master))
+        (stop-master master)
+        (shutdown check-node))
 
       (setf work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *dest-queue* *dest-queue* *dest-queue* :work 10 *rmq-host*
-                             *rmq-port* *rmq-user* *rmq-pass*))
-      (startup work-node nil)
-      (labels ((get-msg-w-restart ()
-                 (handler-case (get-message work-node)
-                   (rabbitmq-error (c)
-                     (declare (ignore c))
-                     (sleep .1)
-                     (get-msg-w-restart)))))
-        (iter:iterate
-          (iter:for item in items)
-          (iter:for got = (get-msg-w-restart))
-          (ok (string= (rmq-message-body got) (format nil "test ~a" item)))
-          (ack-message work-node got))
-        (shutdown work-node))))
+            (build-work-node
+             (format nil "worknode-~d" (get-universal-time))
+             *dest-queue* :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
+      (startup work-node *test-context* "inproc://test" nil)
+      (ng (pull-items work-node))
+      (shutdown work-node)))
 
   (testing "one worker - two nodes"
-    (let ((work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-1 queue-2 queue-3 :work 10 *rmq-host*
-                             *rmq-port* *rmq-user* *rmq-pass*))
-          (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
-      (startup work-node nil)
+    (let* ((work-node
+             (build-test-node
+              (format nil "worknode-~d" (get-universal-time))
+              queue-1 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
+           (items '("1" "3" "testing" "is" "boring" "these" "should" "all"
+                    "be processed"))
+           (i 0)
+           (p (promise))
+           (client-port 55555)
+           (uri (format nil "tcp://localhost:~a" client-port))
+           (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
+           (master (start-master 2 client-port))
+           (worker (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                     :password *rmq-pass*)))
+
+      (add-master-system-recipes master)
+
+      (define-rmq-node checking-node
+          #'(lambda (node item)
+              (declare (ignore node))
+              (ok (string= (format nil "test2 test1 ~a" (nth i items)) item))
+              (incf i)
+              (when (= i (length items))
+                (fulfill p t)))
+        1 :source-queue queue-3)
+
+      (startup work-node *test-context* "inproc://test" nil)
       (iter:iterate
         (iter:for item in items)
         (send-message work-node queue-1 item))
       (shutdown work-node)
 
-      (let* ((client-port 55555)
-             (uri (format nil "tcp://localhost:~a" client-port))
-             (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
-             (recipe1 (build-test-node1-recipe))
-             (recipe2 (build-test-node2-recipe))
-             (master (start-master 2 client-port))
-             (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
+      (let ((check-node (build-checking-node
+                         "check node" queue-4 :check
+                         *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
         (bt:make-thread #'(lambda ()
                             (start-worker worker uri)
                             (run-worker worker)
+                            (sleep .1)
                             (stop-worker worker)
                             (pass "worker-stopped")))
 
         (sleep .1)
-        (add-recipe master recipe1)
-        (add-recipe master recipe2)
+        (startup check-node *test-context* "inproc://test")
 
         (pzmq:with-context nil
           (pzmq:with-socket client :dealer
@@ -321,67 +446,78 @@
             (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
             (test-request-success client)
 
-            (sleep *test-process-time*)
+            (force p)
 
             (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker)))
             (test-shutdown-success client)))
 
+        (shutdown check-node)
         (stop-master master))
 
       (setf work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-3 *dest-queue* *dest-queue* :test 10 *rmq-host*
-                             *rmq-port* *rmq-user* *rmq-pass*))
-      (startup work-node nil)
-      (labels ((get-msg-w-restart ()
-                 (handler-case (get-message work-node)
-                   (rabbitmq-error (c)
-                     (declare (ignore c))
-                     (sleep .1)
-                     (get-msg-w-restart)))))
-        (iter:iterate
-          (iter:for item in items)
-          (iter:for got = (get-msg-w-restart))
-          (ok (string= (rmq-message-body got) (format nil "test2 test1 ~a" item)))
-          (ack-message work-node got))
-        (shutdown work-node))))
+            (build-final-work-node1
+             (format nil "worknode-~d" (get-universal-time))
+             queue-3 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
+      (startup work-node *test-context* "inproc://test" nil)
+      (ng (pull-items work-node))
+      (shutdown work-node)))
 
   (testing "two workers"
-    (let ((work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             *source-queue* queue-1 *dest-queue* :work 10 *rmq-host*
-                             *rmq-port* *rmq-user* *rmq-pass*))
-          (items '("1" "3" "testing" "is" "boring" "these" "should" "all" "be processed")))
-      (startup work-node nil)
+    (let* ((work-node
+             (build-test-node
+              (format nil "worknode-~d" (get-universal-time))
+              queue-1 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
+           (items '("1" "3" "testing" "is" "boring" "these" "should" "all"
+                    "be processed"))
+           (results (iter:iterate
+                      (iter:for item in items)
+                      (iter:collect (format nil "test3 test2 test1 ~a" item))))
+           (client-port 55555)
+           (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
+           (uri (format nil "tcp://localhost:~a" client-port))
+           (master (start-master 2 client-port))
+           (worker1 (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                      :password *rmq-pass*))
+           (worker2 (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                      :password *rmq-pass*))
+           (i 0)
+           (p (promise)))
+
+      (add-master-system-recipes master)
+
+      (define-rmq-node checking-node
+          #'(lambda (node item)
+              (declare (ignore node))
+              (ok (member item results :test #'string=))
+              (incf i)
+              (when (= i (length items))
+                (fulfill p t)))
+        1 :source-queue queue-4)
+
+      (startup work-node *test-context* "inproc://test" nil)
       (iter:iterate
         (iter:for item in items)
         (send-message work-node queue-1 item))
       (shutdown work-node)
 
-      (let* ((client-port 55555)
-             (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
-             (uri (format nil "tcp://localhost:~a" client-port))
-             (recipe1 (build-test-node1-recipe))
-             (recipe2 (build-test-node2-recipe))
-             (recipe3 (build-test-node3-recipe))
-             (master (start-master 2 client-port))
-             (worker1 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
-             (worker2 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*)))
+      (let ((check-node (build-checking-node
+                         "check node" queue-4 :check
+                         *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
         (bt:make-thread #'(lambda ()
                             (start-worker worker1 uri)
                             (run-worker worker1)
+                            (sleep .1)
                             (stop-worker worker1)
                             (pass "worker1-stopped")))
         (bt:make-thread #'(lambda ()
                             (start-worker worker2 uri)
                             (run-worker worker2)
+                            (sleep .1)
                             (stop-worker worker2)
                             (pass "worker2-stopped")))
 
         (sleep .1)
-        (add-recipe master recipe1)
-        (add-recipe master recipe2)
-        (add-recipe master recipe3)
+        (startup check-node *test-context* "inproc://test")
 
         (pzmq:with-context nil
           (pzmq:with-socket client :dealer
@@ -399,33 +535,20 @@
             (send-msg client *mmop-v0* (mmop-c:start-node-request-v0 "TEST-NODE2"))
             (test-request-success client)
 
-            (sleep *test-process-time*)
+            (force p)
 
             (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker1)))
             (test-shutdown-success client)
             (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker2)))
             (test-shutdown-success client)))
 
+        (shutdown check-node)
         (stop-master master))
 
       (setf work-node
-            (build-test-node (format nil "worknode-~d" (get-universal-time))
-                             queue-4 *dest-queue* *dest-queue* :work 10 *rmq-host*
-                             *rmq-port* *rmq-user* *rmq-pass*))
-      (startup work-node nil)
-
-      (let ((results (iter:iterate
-                       (iter:for item in items)
-                       (iter:collect (format nil "test3 test2 test1 ~a" item)))))
-        (labels ((get-msg-w-restart ()
-                   (handler-case (get-message work-node)
-                     (rabbitmq-error (c)
-                       (declare (ignore c))
-                       (sleep .1)
-                       (get-msg-w-restart)))))
-          (iter:iterate
-            (iter:for item in items)
-            (iter:for got = (get-msg-w-restart))
-            (ok (member (rmq-message-body got) results :test #'string=))
-            (ack-message work-node got))
-          (shutdown work-node))))))
+            (build-final-work-node
+             (format nil "worknode-~d" (get-universal-time))
+             queue-4 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
+      (startup work-node *test-context* "inproc://test" nil)
+      (ng (pull-items work-node))
+      (shutdown work-node))))

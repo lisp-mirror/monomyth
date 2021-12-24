@@ -9,3 +9,13 @@ services:
     ports:
       - 5672:5672
       - 15672:15672
+
+  postgres:
+    image: postgres:13-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_DB: monomyth
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - 5432:5432

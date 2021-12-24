@@ -25,7 +25,8 @@
            build-test-node1-recipe
            build-test-node2-recipe
            build-test-node3-recipe
-           build-test-node4-recipe))
+           build-test-node4-recipe
+           add-basic-example-recipes))
 (in-package :monomyth/processing-tests/utils)
 
 (defparameter *rmq-host* (uiop:getenv "TEST_PROCESSING_RMQ"))
@@ -40,21 +41,25 @@
 (defparameter *queue4* "TEST-NODE3-to-TEST_NODE4")
 (defparameter *queue5* "TEST-NODE4-to-END")
 
-(define-rmq-node test-node nil *queue1* *queue2* 10)
+(define-rmq-node test-node nil 1 :source-queue *queue5* :dest-queue *queue1*)
 
-(defmethod fn1 (item)
+(defun fn1 (node item)
+  (declare (ignore node))
   (format nil "~a18" item))
 
-(defmethod fn2 (item)
+(defun fn2 (node item)
+  (declare (ignore node))
   (coerce (remove-if #'alpha-char-p (coerce item 'list)) 'string))
 
-(defmethod fn3 (item)
+(defun fn3 (node item)
+  (declare (ignore node))
   (format nil "~a" (* (parse-integer item) 7)))
 
-(defmethod fn4 (item)
+(defun fn4 (node item)
+  (declare (ignore node))
   (format nil "test ~a" item))
 
-(define-system
+(define-system basic-example ()
     (:name test-node1 :fn #'fn1 :batch-size 10)
     (:name test-node2 :fn #'fn2 :batch-size 10)
   (:name test-node3 :fn #'fn3 :batch-size 10)

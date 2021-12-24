@@ -4,6 +4,7 @@
   (:export pull-master-message
            sent-mmop
            received-mmop
+           worker-task-completed-v0
            ping-v0
            recipe-info-v0
            worker-info-v0
@@ -17,6 +18,7 @@
            stop-worker-request-failure-v0
            worker-ready-v0
            start-node-v0
+           complete-task-v0
            start-node-success-v0
            start-node-failure-v0
            shutdown-worker-v0))
@@ -37,6 +39,8 @@
   (stop-worker-request-success-v0 string)
   ;; client-id error-message status-code
   (stop-worker-request-failure-v0 string string integer)
+  ;; client-id node-type
+  (complete-task-v0 string string)
   ;; client-id
   (shutdown-worker-v0 string))
 
@@ -56,7 +60,9 @@
   ;; client-id type
   (start-node-success-v0 string string)
   ;; client-id type reason-category reason-message
-  (start-node-failure-v0 string string string string))
+  (start-node-failure-v0 string string string string)
+  ;; client-id node-type
+  (worker-task-completed-v0 string string))
 
 (defmethod create-frames ((message pong-v0))
   `(,(pong-v0%0 message) ,*mmop-v0* "PONG"))
@@ -90,6 +96,10 @@
 (defmethod create-frames ((message shutdown-worker-v0))
   `(,(shutdown-worker-v0%0 message) ,*mmop-v0* "SHUTDOWN"))
 
+(defmethod create-frames ((message complete-task-v0))
+  `(,(complete-task-v0%0 message) ,*mmop-v0* "COMPLETE-TASK"
+    ,(complete-task-v0%1 message)))
+
 (defun pull-master-message (socket)
   "pulls down a message designed for the master router socket and attempts to
 translate it into an equivalent struct"
@@ -117,7 +127,9 @@ translate it into an equivalent struct"
                ((list "START-NODE-SUCCESS" node-type)
                 (start-node-success-v0 id node-type))
                ((list "START-NODE-FAILURE" node-type cat msg)
-                (start-node-failure-v0 id node-type cat msg)))))
+                (start-node-failure-v0 id node-type cat msg))
+               ((list "WORKER-TASK-COMPLETED" node-type)
+                (worker-task-completed-v0 id node-type)))))
 
     (if res res
         (error 'mmop-error :version *mmop-v0* :message "unknown mmop command"))))

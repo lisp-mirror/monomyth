@@ -12,3 +12,6 @@
 *.pdf
 
 .qlot/*
+
+*.tex
+*.pdf

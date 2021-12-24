@@ -18,8 +18,8 @@ node "Worker Server 1" {
                 () "Data Stream Connection 1-2" <-- [Node Object 1-2]
                 [Data Queues] -- () "Data Stream Connection 1-2"
         }
-        [Node Object 1-1] <-- [Worker Object 1]
-        [Node Object 1-2] <-- [Worker Object 1]
+        [Node Object 1-1] -- [Worker Object 1]
+        [Node Object 1-2] -- [Worker Object 1]
 }
 
 node "Worker Server 2" {
@@ -31,8 +31,8 @@ node "Worker Server 2" {
                 () "Data Stream Connection 2-2" <-- [Node Object 2-2]
                 [Data Queues] -- () "Data Stream Connection 2-2"
         }
-        [Node Object 2-1] <-- [Worker Object 2]
-        [Node Object 2-2] <-- [Worker Object 2]
+        [Node Object 2-1] -- [Worker Object 2]
+        [Node Object 2-2] -- [Worker Object 2]
 }
 
 node "Master Server" {

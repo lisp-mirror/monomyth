@@ -21,3 +21,6 @@ ql quri
 ql dexador
 ql cl-mock
 ql optima
+ql cl-str
+ql cl-dbi
+ql cl-migratum
