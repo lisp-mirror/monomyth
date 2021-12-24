@@ -94,3 +94,15 @@
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
   :version "ql-2020-12-20"))
+("cl-str" .
+ (:class qlot/source/ql:source-ql
+  :initargs (:%version :latest)
+  :version "ql-2021-12-09"))
+("cl-dbi" .
+ (:class qlot/source/ql:source-ql
+  :initargs (:%version :latest)
+  :version "ql-2021-12-09"))
+("cl-migratum" .
+ (:class qlot/source/ql:source-ql
+  :initargs (:%version :latest)
+  :version "ql-2021-12-09"))

@@ -107,3 +107,28 @@ master perspective"
   :description "Example system for monomyth for modeling actual data processing,
 worker perspective"
   :perform (test-op (op c) (symbol-call :rove '#:run c)))
+
+(defsystem "monomyth/map-reduce-example"
+  :author "Paul Ricks"
+  :license "MPL 2.0"
+  :depends-on (:monomyth
+               :str
+               :quri
+               :dexador
+               :cl-dbi
+               :cl-migratum
+               :cl-migratum.driver.sql
+               :cl-migratum.provider.local-path)
+  :components ((:module "example/map-reduce"
+                :components
+                ((:file "load")
+                 (:file "map")
+                 (:file "db")
+                 (:file "migrations"
+                  :depends-on ("db"))
+                 (:file "store"
+                  :depends-on ("db"))
+                 (:file "main"
+                  :depends-on ("load" "map" "store")))))
+  :description "Example system for monomyth to display a map reduce problem"
+  :perform (test-op (op c) (symbol-call :rove '#:run c)))

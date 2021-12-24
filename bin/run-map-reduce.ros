@@ -1,0 +1,18 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+(progn ;;init forms
+  (ros:ensure-asdf)
+  #+quicklisp(ql:quickload '(:monomyth/map-reduce-example))
+  )
+
+(defpackage :ros.script.run-map-reduce.3849350311
+  (:use :cl))
+(in-package :ros.script.run-map-reduce.3849350311)
+
+(defun main (&rest argv)
+  (declare (ignorable argv))
+  (monomyth/map-reduce/main:run))
+;;; vim: set ft=lisp lisp:
