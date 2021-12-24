@@ -293,8 +293,18 @@ to a plist with :running and :queued"
        (mapcar #'pull-worker-type-info (ghash-values (master-workers master)))
        :initial-value (fset:empty-map))))
 
+(transaction
+    (defun add-base-recipe-info (master worker-type-info)
+      "adds any missing recipes (not yet activated) to the info map"
+      (iter:iterate
+        (iter:with info = (fset:with-default worker-type-info nil))
+        (iter:for recipe in (ghash-keys (master-recipes master)))
+        (when (not (fset:lookup info recipe))
+          (setf info (fset:with info recipe '(:|running| 0 :|queued| 0 :|completed| 0))))
+        (iter:finally (return info)))))
+
 (defun send-recipe-info (master socket client-id)
-  (let ((info-map (atomic (pull-master-type-info master))))
+  (let ((info-map (atomic (add-base-recipe-info master (pull-master-type-info master)))))
     (send-msg
      socket *mmop-v0*
      (json-info-response-v0

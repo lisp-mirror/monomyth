@@ -188,9 +188,13 @@
       (add-api-recipes master)
 
 
-      (let ((resp (multiple-value-list (dex:get uri))))
+      (let* ((resp (multiple-value-list (dex:get uri)))
+             (payload (parse (car resp))))
         (ok (= (nth 1 resp) 200))
-        (ok (string= (car resp) (to-json '())))))
+        (ok (= 3 (length payload)))
+        (iter:iterate
+          (iter:for item in payload)
+          (ok (equal '(:|completed| 0 :|queued| 0 :|running| 0) (getf item :|counts|))))))
 
     (testing "nodes running"
       (pzmq:with-context nil
