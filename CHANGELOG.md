@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Node recipes no longer control batch size, these are no set in the dsl via the
   `build-node` functions.
 
+### Fixed
+- The recipe info endpoint on the control api now lists all recipes regardless of
+  whether they have ever been used or not.
+
 ## [0.3.1] - 2020-11-11
 ### Fixed
 - Fixed bug where the trivia match call in `mmop-control` couldn't build.
