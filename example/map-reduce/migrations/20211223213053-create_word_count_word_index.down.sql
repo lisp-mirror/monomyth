@@ -1,1 +1,1 @@
-DROP INDEX word_counts_idx1;
+DROP INDEX map_reduce.word_counts_idx1;
