@@ -111,7 +111,7 @@
         (iter:for item in payload)
         (iter:for path = (format nil "/stop-worker/~a" (getf item :|worker_id|)))
         (setf (quri:uri-path uri) path)
-        (v:info :main "worker stop request (~a) returned [status ~a]"
+        (v:info :main "worker stop request (~a) returned [result ~a]"
                 path (dex:post uri))))))
 
 (defun check-tasks-complete (uri)

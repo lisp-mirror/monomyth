@@ -28,12 +28,23 @@
   "pulls all the known word counts from the database"
   (dbi:fetch-all (dbi:execute (dbi:prepare conn *get-all-counts-query*))))
 
-(defparameter *add-word-counts-query*
+(defparameter *add-word-counts-query-start*
   "
 INSERT INTO map_reduce.word_counts (word, word_count)
-VALUES (?, ?)
+VALUES ")
+(defparameter *add-word-counts-query-end*
+  "
 ON CONFLICT (word)
 DO UPDATE SET word_count = EXCLUDED.word_count + word_counts.word_count")
-(defun add-word-counts (conn word val)
+(defparameter *values-pair* "(? ,?)")
+(defun add-word-counts (conn vals)
   "upserts a new word count value into the database"
-  (dbi:fetch-all (dbi:execute (dbi:prepare conn *add-word-counts-query*) (list word val))))
+  (let* ((values
+           (iter:iterate
+             (iter:repeat (/ (length vals) 2))
+             (iter:collect *values-pair*)))
+         (values-str (str:join ", " values))
+         (query (str:concat *add-word-counts-query-start*
+                            values-str
+                            *add-word-counts-query-end*)))
+    (dbi:fetch-all (dbi:execute (dbi:prepare conn query) vals))))

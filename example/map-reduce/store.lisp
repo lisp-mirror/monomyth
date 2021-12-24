@@ -17,6 +17,7 @@
 (defun store-counts (node item)
   "parses the json payload and stores all of the counts"
   (declare (ignore node))
-  (let ((payload (parse item)))
-    (doplist (word count payload)
-      (add-word-counts *db-connection* (string word) count))))
+  (add-word-counts
+   *db-connection*
+   (mapcar #'(lambda (val) (if (symbolp val) (string val) val))
+           (parse item))))
