@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sequence and the end of the shutdown sequence respectively.
 - Node recipes now contain a list of 'dependent' nodes (nodes next in the system).
   The DSL will construct these automatically.
+- Map/reduce example.
 
 ### Changed
 - Node shutdown now attempts to kill the worker thread and wait to complete their
