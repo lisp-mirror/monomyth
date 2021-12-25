@@ -45,7 +45,8 @@
                :iterate
                :verbose
                :cl-rabbit
-               :lucerne
+               :clack
+               :ningle
                :woo
                :babel)
   :description "A distributed data processing library for CL"

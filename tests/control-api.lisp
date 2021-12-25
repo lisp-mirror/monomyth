@@ -2,7 +2,7 @@
   (:use :cl :rove :monomyth/control-api/main :bordeaux-threads :monomyth/mmop
    :monomyth/master :jonathan :cl-rabbit :monomyth/tests/utils :rutils.misc
         :monomyth/rmq-node :monomyth/rmq-worker :monomyth/worker
-        :monomyth/dsl))
+        :monomyth/dsl :babel))
 (in-package :monomyth/tests/control-api)
 
 (v:output-here *terminal-io*)
@@ -42,42 +42,44 @@
     (destroy-connection conn)))
 
 (deftest startup
-  (let ((master (start-master 2 *master-port*)))
-    (start-server *master-uri* *api-port*)
-    (stop-server)
+  (let ((master (start-master 2 *master-port*))
+        (handler (start-control-server *master-uri* *api-port*)))
+
+    (stop-control-server handler)
     (stop-master master)
     (pass "server shutdown")))
 
+
 (deftest ping-endpoint
   (let ((master (start-master 2 *master-port*))
+        (handler (start-control-server *master-uri* *api-port*))
         (uri (quri:uri *api-uri*)))
-    (start-server *master-uri* *api-port*)
-
     (add-api-recipes master)
 
     (setf (quri:uri-path uri) "/ping")
-    (let* ((resp (multiple-value-list (dex:get uri))))
+    (let* ((resp (multiple-value-list (dex:get uri)))
+           (body (octets-to-string (car resp))))
       (ok (= (nth 1 resp) 200))
-      (ok (string= (car resp) "pong")))
+      (ok (string= body "pong")))
 
-    (stop-server)
+    (stop-control-server handler)
     (stop-master master)
     (pass "server shutdown")))
 
 (deftest start-node-endpoint
   (let ((master (start-master 2 *master-port*))
-        (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
+        (worker (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                  :password *rmq-pass*))
+        (handler (start-control-server *master-uri* *api-port*))
         (uri (quri:uri *api-uri*)))
-
     (add-api-recipes master)
-    (start-server *master-uri* *api-port*)
 
     (testing "no workers"
       (setf (quri:uri-path uri) "/start-node/TEST-NODE1")
       (handler-case (dex:post uri)
         (dex:http-request-failed (e)
           (ok (= (dex:response-status e) 503))
-          (let ((body (parse (dex:response-body e))))
+          (let ((body (parse (octets-to-string (dex:response-body e)))))
             (ng (getf body :|request_sent_to_worker|))
             (ok (string= (getf body :|error_message|)
                          "no active worker servers"))))))
@@ -92,7 +94,7 @@
 
     (testing "good recipe"
       (let* ((resp (multiple-value-list (dex:post uri)))
-             (body (parse (car resp))))
+             (body (parse (octets-to-string (car resp)))))
         (ok (= (nth 1 resp) 201))
         (ok (getf body :|request_sent_to_worker|))))
 
@@ -101,28 +103,29 @@
       (handler-case (dex:post uri)
         (dex:http-request-failed (e)
           (ok (= (dex:response-status e) 400))
-          (let ((body (parse (dex:response-body e))))
+          (let ((body (parse (octets-to-string (dex:response-body e)))))
             (ng (getf body :|request_sent_to_worker|))
             (ok (string= (getf body :|error_message|)
                          "could not find recipe type BAD-TEST"))))))
 
-    (stop-server)
+    (stop-control-server handler)
     (stop-master master)
     (pass "server shutdown")))
 
 (deftest stop-worker-endpoint
   (let ((master (start-master 2 *master-port*))
-        (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
+        (worker (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                  :password *rmq-pass*))
+        (handler (start-control-server *master-uri* *api-port*))
         (uri (quri:uri *api-uri*)))
     (add-api-recipes master)
-    (start-server *master-uri* *api-port*)
 
     (testing "no workers"
       (setf (quri:uri-path uri) "/stop-worker/test")
       (handler-case (dex:post uri)
         (dex:http-request-failed (e)
           (ok (= (dex:response-status e) 400))
-          (let ((body (parse (dex:response-body e))))
+          (let ((body (parse (octets-to-string (dex:response-body e)))))
             (ng (getf body :|request_sent_to_worker|))
             (ok (string= (getf body :|error_message|)
                          "could not shutdown unrecognized worker test"))))))
@@ -138,7 +141,7 @@
     (testing "good worker"
       (setf (quri:uri-path uri) (format nil "/stop-worker/~a" (worker/name worker)))
       (let* ((resp (multiple-value-list (dex:post uri)))
-             (body (parse (car resp))))
+             (body (parse (octets-to-string (car resp)))))
         (ok (= (nth 1 resp) 201))
         (ok (getf body :|request_sent_to_worker|))))
 
@@ -147,12 +150,12 @@
       (handler-case (dex:post uri)
         (dex:http-request-failed (e)
           (ok (= (dex:response-status e) 400))
-          (let ((body (parse (dex:response-body e))))
+          (let ((body (parse (octets-to-string (dex:response-body e)))))
             (ng (getf body :|request_sent_to_worker|))
             (ok (string= (getf body :|error_message|)
                          "could not shutdown unrecognized worker test"))))))
 
-    (stop-server)
+    (stop-control-server handler)
     (stop-master master)
     (pass "server shutdown")))
 
@@ -168,11 +171,12 @@
 
 (deftest recipe-info-endpoint
   (let ((master (start-master 2 *master-port*))
-        (worker (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
+        (worker (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                  :password *rmq-pass*))
+        (handler (start-control-server *master-uri* *api-port*))
         (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
         (uri (quri:uri *api-uri*)))
 
-    (start-server *master-uri* *api-port*)
     (bt:make-thread
      #'(lambda ()
          (start-worker worker (format nil "tcp://localhost:~a" *master-port*))
@@ -182,14 +186,14 @@
     (setf (quri:uri-path uri) "/recipe-info")
 
     (testing "no running nodes/no recipes"
-      (ok (string= (dex:get uri) (to-json '()))))
+      (ok (string= (octets-to-string (dex:get uri)) (to-json '()))))
 
     (testing "no running nodes/recipes"
       (add-api-recipes master)
 
 
       (let* ((resp (multiple-value-list (dex:get uri)))
-             (payload (parse (car resp))))
+             (payload (parse (octets-to-string (car resp)))))
         (ok (= (nth 1 resp) 200))
         (ok (= 3 (length payload)))
         (iter:iterate
@@ -217,7 +221,7 @@
 
       (let ((resp (multiple-value-list (dex:get uri))))
         (ok (= (nth 1 resp) 200))
-        (confirm-recipe-counts (parse (car resp)))))
+        (confirm-recipe-counts (parse (octets-to-string (car resp))))))
 
     (sleep .1)
 
@@ -230,7 +234,7 @@
       (sleep .1)
 
       (let* ((resp (multiple-value-list (dex:get uri)))
-             (body (parse (car resp))))
+             (body (parse (octets-to-string (car resp)))))
         (ok (= (nth 1 resp) 200))
         (iter:iterate
           (iter:for item in body)
@@ -246,26 +250,29 @@
         (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker)))
         (test-shutdown-success client)))
 
-    (stop-server)
+    (stop-control-server handler)
     (stop-master master)
     (pass "server shutdown")))
 
 (deftest worker-info-endpoint
   (let* ((master (start-master 2 *master-port*))
-         (worker1 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
-         (worker2 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
-         (worker3 (build-rmq-worker :host *rmq-host* :username *rmq-user* :password *rmq-pass*))
+         (handler (start-control-server *master-uri* *api-port*))
+         (worker1 (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                    :password *rmq-pass*))
+         (worker2 (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                    :password *rmq-pass*))
+         (worker3 (build-rmq-worker :host *rmq-host* :username *rmq-user*
+                                    :password *rmq-pass*))
          (worker-ids `(,(worker/name worker1) ,(worker/name worker2) ,(worker/name worker3)))
          (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
          (uri (quri:uri *api-uri*)))
     (add-api-recipes master)
-    (start-server *master-uri* *api-port*)
     (setf (quri:uri-path uri) "/worker-info")
 
     (testing "no workers running"
       (let ((resp (multiple-value-list (dex:get uri))))
         (ok (= (nth 1 resp) 200))
-        (ok (string= (car resp) (to-json '())))))
+        (ok (string= (octets-to-string (car resp)) (to-json '())))))
 
     (bt:make-thread #'(lambda ()
                         (start-worker worker1 (format nil "tcp://localhost:~a" *master-port*))
@@ -287,7 +294,7 @@
 
     (testing "workers running, no recipes"
       (let* ((resp (multiple-value-list (dex:get uri)))
-             (body (parse (car resp))))
+             (body (parse (octets-to-string (car resp)))))
         (ok (= (nth 1 resp) 200))
         (iter:iterate
           (iter:for worker-info in body)
@@ -318,7 +325,7 @@
       (sleep .1)
 
       (let* ((resp (multiple-value-list (dex:get uri)))
-             (body (parse (car resp)))
+             (body (parse (octets-to-string (car resp))))
              (counts (reduce
                       #'(lambda (acc val)
                           (fset:map-union
@@ -329,7 +336,7 @@
         (ok (= (fset:lookup counts "TEST-NODE2") 2))
         (ok (= (fset:lookup counts "TEST-NODE3") 4))))
 
-    (stop-server)
+    (stop-control-server handler)
     (stop-master master)
     (pass "server shutdown")))
 
