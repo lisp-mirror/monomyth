@@ -3,7 +3,7 @@
         :monomyth/map-reduce/store :monomyth/dsl :monomyth/worker
         :monomyth/rmq-worker :cl-rabbit :monomyth/rmq-node :monomyth/mmop
         :monomyth/node-recipe :monomyth/master :monomyth/control-api/main
-        :rutils.bind :jonathan)
+        :rutils.bind :jonathan :babel)
   (:export run))
 (in-package :monomyth/map-reduce/main)
 
@@ -85,40 +85,41 @@
     (setf (quri:uri-path uri) "/start-node/STORE-COUNTS")
     (iter:iterate
       (iter:repeat *store-node-counts*)
-      (v:info :main "start node (store counts) returned [status ~a]"
-              (dex:post uri)))
+      (v:info :main "start node (store counts) returned [~a]"
+              (octets-to-string (dex:post uri))))
 
     (setf (quri:uri-path uri) "/start-node/MAP-TEXT")
     (iter:iterate
       (iter:repeat *map-node-counts*)
-      (v:info :main "start node (map text) returned [status ~a]"
-              (dex:post uri)))
+      (v:info :main "start node (map text) returned [~a]"
+              (octets-to-string (dex:post uri))))
 
     (setf (quri:uri-path uri) "/start-node/LOAD-FILE")
     (iter:iterate
       (iter:repeat *load-node-counts*)
-      (v:info :main "start node (load file) returned [status ~a]"
-              (dex:post uri)))))
+      (v:info :main "start node (load file) returned [~a]"
+              (octets-to-string (dex:post uri))))))
 
 (defun stop-workers ()
   (let ((uri (quri:copy-uri *control-uri*)))
     (setf (quri:uri-path uri) "/worker-info")
 
     (with ((body status (dex:get uri))
-           (payload (parse body)))
+           (payload (parse (octets-to-string body))))
       (v:info :main "worker info request returned [status ~a]" status)
       (iter:iterate
         (iter:for item in payload)
         (iter:for path = (format nil "/stop-worker/~a" (getf item :|worker_id|)))
         (setf (quri:uri-path uri) path)
         (v:info :main "worker stop request (~a) returned [result ~a]"
-                path (dex:post uri))))))
+                path (octets-to-string (dex:post uri)))))))
 
 (defun check-tasks-complete (uri)
   (with ((body status (dex:get uri))
-         (payload (parse body)))
+         (body-str (octets-to-string body))
+         (payload (parse body-str)))
     (v:info :main.check "check call returned [status ~a] [body ~a]"
-            status body)
+            status body-str)
 
     (iter:iterate
       (iter:for item in payload)
@@ -134,9 +135,9 @@
       (iter:until (check-tasks-complete uri)))))
 
 (defun run ()
-  (let ((master (start-master *master-threads* *mmop-port*)))
+  (let ((master (start-master *master-threads* *mmop-port*))
+        (handler (start-control-server *master-uri* *control-port*)))
     (add-map-reduce-recipes master)
-    (start-server *master-uri* *control-port*)
     (v:info :main "servers started")
     (run-workers)
     (v:info :main "workers started")
@@ -145,5 +146,5 @@
     (wait-for-tasks)
     (v:info :main "stopping workers")
     (stop-workers)
-    (stop-server)
+    (stop-control-server handler)
     (stop-master master)))

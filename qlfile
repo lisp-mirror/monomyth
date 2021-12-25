@@ -14,7 +14,8 @@ ql iterate
 ql verbose
 ql cl-rabbit
 ql babel
-ql lucerne
+ql ningle
+ql clack
 ql woo
 ql rove
 ql quri

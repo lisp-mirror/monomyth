@@ -1,10 +1,16 @@
-FROM ubuntu:bionic
+FROM debian:buster
 MAINTAINER Paul Ricks <pauljricks@gmail.com>
 
 ENV PATH "$PATH:/root/.roswell/bin"
 
+ARG ROS_VERSION=21.10.14.111
+
 RUN apt update -qy && \
-    apt install -y curl libcurl4-openssl-dev automake build-essential librabbitmq-dev libzmq3-dev libffi-dev libev-dev && \
-    curl -L https://raw.githubusercontent.com/roswell/roswell/release/scripts/install-for-ci.sh | sh && \
-    ros run -- --version && \
-    ros install qlot
+    apt install -y curl libcurl4-openssl-dev libcurl3-gnutls automake build-essential librabbitmq-dev libzmq3-dev libffi-dev libev-dev pkg-config
+
+RUN curl -L "https://github.com/roswell/roswell/releases/download/v${ROS_VERSION}/roswell_${ROS_VERSION}-1_amd64.deb" --output roswell.deb && \
+    dpkg -i roswell.deb
+
+RUN ros run -- --version
+
+RUN ros install qlot
