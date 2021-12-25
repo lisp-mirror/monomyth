@@ -11,6 +11,7 @@
 (defparameter *api-uri* (format nil "http://127.0.0.1:~a" *api-port*))
 (defparameter *master-port* 55555)
 (defparameter *master-uri* (format nil "tcp://127.0.0.1:~a" *master-port*))
+(defparameter *startup-wait* 0.5)
 
 (defun fn1 (node item)
   (declare (ignore node))
@@ -44,6 +45,7 @@
 (deftest startup
   (let ((master (start-master 2 *master-port*))
         (handler (start-control-server *master-uri* *api-port*)))
+    (sleep *startup-wait*)
 
     (stop-control-server handler)
     (stop-master master)
@@ -54,6 +56,7 @@
   (let ((master (start-master 2 *master-port*))
         (handler (start-control-server *master-uri* *api-port*))
         (uri (quri:uri *api-uri*)))
+    (sleep *startup-wait*)
     (add-api-recipes master)
 
     (setf (quri:uri-path uri) "/ping")
@@ -72,6 +75,7 @@
                                   :password *rmq-pass*))
         (handler (start-control-server *master-uri* *api-port*))
         (uri (quri:uri *api-uri*)))
+    (sleep *startup-wait*)
     (add-api-recipes master)
 
     (testing "no workers"
@@ -118,6 +122,7 @@
                                   :password *rmq-pass*))
         (handler (start-control-server *master-uri* *api-port*))
         (uri (quri:uri *api-uri*)))
+    (sleep *startup-wait*)
     (add-api-recipes master)
 
     (testing "no workers"
@@ -176,6 +181,7 @@
         (handler (start-control-server *master-uri* *api-port*))
         (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
         (uri (quri:uri *api-uri*)))
+    (sleep *startup-wait*)
 
     (bt:make-thread
      #'(lambda ()
@@ -266,6 +272,7 @@
          (worker-ids `(,(worker/name worker1) ,(worker/name worker2) ,(worker/name worker3)))
          (client-name (format nil "test-client-~a" (uuid:make-v4-uuid)))
          (uri (quri:uri *api-uri*)))
+    (sleep *startup-wait*)
     (add-api-recipes master)
     (setf (quri:uri-path uri) "/worker-info")
 
