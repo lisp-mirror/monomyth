@@ -18,7 +18,7 @@ Design documentation can be found at `design/doc.org`.
 ## Tests
 
 To run the tests you will need to have `roswell` and `qlot` installed, the tests
-have been verified on SBCL 2.0.3.
+have been verified on SBCL 2.1.11.
 Then perform the following:
 ```bash
 source test_env.sh
