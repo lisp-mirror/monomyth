@@ -80,14 +80,15 @@ It also stores the zmq context and a transnational running conditional."
          (pzmq:bind threads *internal-conn-name*)
          (pzmq:bind clients (format nil "tcp://*:~a" client-port))
 
-         (pzmq:with-poll-items items (threads clients)
+         (pzmq:with-poll-items items ((threads :pollin) (clients :pollin))
            (iter:iterate
              (iter:with wrker-count = 0)
              (iter:while (master-running master))
              (pzmq:poll items)
 
+
              (when (member :pollin (pzmq:revents items 0))
-              (route-outgoing-message clients threads))
+               (route-outgoing-message clients threads))
 
              (when (member :pollin (pzmq:revents items 1))
                (route-incoming-message
