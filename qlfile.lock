@@ -66,10 +66,14 @@
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
   :version "ql-2020-12-20"))
-("lucerne" .
+("ningle" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
-  :version "ql-2020-12-20"))
+  :version "ql-2021-12-09"))
+("clack" .
+ (:class qlot/source/ql:source-ql
+  :initargs (:%version :latest)
+  :version "ql-2021-12-09"))
 ("woo" .
  (:class qlot/source/ql:source-ql
   :initargs (:%version :latest)
