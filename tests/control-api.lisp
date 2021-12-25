@@ -237,7 +237,7 @@
       (send-msg (worker/master-socket worker) *mmop-v0*
                 (mmop-w:worker-task-completed-v0 "TEST-NODE1"))
 
-      (sleep .1)
+      (sleep 1)
 
       (let* ((resp (multiple-value-list (dex:get uri)))
              (body (parse (octets-to-string (car resp)))))
@@ -245,8 +245,12 @@
         (iter:iterate
           (iter:for item in body)
           (iter:for name = (getf item :|type|))
-          (if (or (string= "TEST-NODE2" name) (string= "TEST-NODE1" name))
-              (ok (= 1 (getf (getf item :|counts|) :|completed|)))))))
+          (if (string= "TEST-NODE1" name)
+              (ok (= 1 (getf (getf item :|counts|) :|completed|))))
+          (if (string= "TEST-NODE2" name)
+              (ok (= 2 (getf (getf item :|counts|) :|completed|))))
+          (if (string= "TEST-NODE3" name)
+              (ok (= 3 (getf (getf item :|counts|) :|completed|)))))))
 
     (pzmq:with-context nil
       (pzmq:with-socket client :dealer
