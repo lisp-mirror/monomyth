@@ -1,7 +1,8 @@
 FROM debian:buster
 MAINTAINER Paul Ricks <pauljricks@gmail.com>
 
-ARG SBCL_VERSION=sbcl/2.1.11
+ENV PATH "$PATH:/root/.roswell/bin"
+
 ARG ROS_VERSION=21.10.14.111
 
 RUN apt update -qy && \
