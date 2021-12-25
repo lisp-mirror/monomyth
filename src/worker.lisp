@@ -64,8 +64,7 @@ it should be okay start a node"))
   "main event loop for the worker"
   (let ((master-socket (worker/master-socket worker))
         (nodes-socket (worker/nodes-socket worker)))
-    (pzmq:with-poll-items items
-        (master-socket nodes-socket)
+    (pzmq:with-poll-items items ((master-socket :pollin) (nodes-socket :pollin))
       (iter:iterate
         (pzmq:poll items)
         (handler-case
