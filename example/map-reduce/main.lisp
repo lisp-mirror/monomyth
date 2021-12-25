@@ -105,14 +105,14 @@
     (setf (quri:uri-path uri) "/worker-info")
 
     (with ((body status (dex:get uri))
-           (payload (octets-to-string (parse body))))
+           (payload (parse (octets-to-string body))))
       (v:info :main "worker info request returned [status ~a]" status)
       (iter:iterate
         (iter:for item in payload)
         (iter:for path = (format nil "/stop-worker/~a" (getf item :|worker_id|)))
         (setf (quri:uri-path uri) path)
         (v:info :main "worker stop request (~a) returned [result ~a]"
-                path (dex:post uri))))))
+                path (octets-to-string (dex:post uri)))))))
 
 (defun check-tasks-complete (uri)
   (with ((body status (dex:get uri))
