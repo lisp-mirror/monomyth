@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   This should result in about the same behavior in terms of shutdown (though
   slower) but vastly decrease processing time of longer processes.
   Test time, however, has increased since node now wait longer to exit.
+- Nodes now wait for the iteration to be 'finished' when they complete a task.
 
 ### Fixed
 - The worker thread and master routing threads now block properly instead of
