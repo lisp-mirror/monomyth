@@ -5,6 +5,10 @@ stages:
 
 test:
   stage: test
+  cache:
+    key: qlot-cache
+    paths:
+      - .qlot/
   services:
     - rabbitmq:latest
   variables:
