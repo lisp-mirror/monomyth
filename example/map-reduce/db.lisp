@@ -6,7 +6,7 @@
 (in-package :monomyth/map-reduce/db)
 
 (defparameter *postgres-db* "monomyth")
-(defparameter *postgres-host* "localhost")
+(defparameter *postgres-host* (uiop:getenv "POSTGRES_HOST"))
 (defparameter *postgres-port* 5432)
 (defparameter *postgres-user* "user")
 (defparameter *postgres-pass* "password")

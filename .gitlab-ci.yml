@@ -43,6 +43,7 @@ test-map-reduce:
     POSTGRES_USER: "user"
     POSTGRES_PASSWORD: "password"
 
+    POSTGRES_HOST: "postgres"
     TEST_FILE_PATH: "test-resources/moby-dick.txt"
     MIGRATIONS_PATH: "example/map-reduce/migrations/"
   before_script:
