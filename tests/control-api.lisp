@@ -237,18 +237,22 @@
 
       (sleep 3)
 
-      (let* ((resp (multiple-value-list (dex:get uri)))
-             (body (parse (car resp))))
-        (ok (= (nth 1 resp) 200))
-        (iter:iterate
-          (iter:for item in body)
-          (iter:for name = (getf item :|type|))
-          (if (string= "TEST-NODE1" name)
-              (ok (= 1 (getf (getf item :|counts|) :|completed|))))
-          (if (string= "TEST-NODE2" name)
-              (ok (= 2 (getf (getf item :|counts|) :|completed|))))
-          (if (string= "TEST-NODE3" name)
-              (ok (= 3 (getf (getf item :|counts|) :|completed|)))))))
+      (iter:iterate
+        (sleep 1)
+        (let* ((resp (multiple-value-list (dex:get uri)))
+               (body (parse (car resp))))
+          (ok (= (nth 1 resp) 200))
+          (when (iter:iterate
+                  (iter:for item in body)
+                  (iter:for name = (getf item :|type|))
+                  (iter:for count = (getf (getf item :|counts|) :|completed| 0))
+                  (if (string= "TEST-NODE1" name)
+                      (iter:always (= 1 count)))
+                  (if (string= "TEST-NODE2" name)
+                      (iter:always (= 2 count)))
+                  (if (string= "TEST-NODE3" name)
+                      (iter:always (= 3 count))))
+            (iter:leave (ok "all jobs complete"))))))
 
     (pzmq:with-context nil
       (pzmq:with-socket client :dealer
