@@ -42,8 +42,12 @@ press the return button in the first process.
 
 The map reduce example is also filled with shortfalls, but at least is closer to
 a real world example.
-The entire thing can be run through an included script, just run
-`qlot exec ./bin/run-map-reduce.ros`.
+The entire thing can be run through an included script, make sure that
+`POSTGRES_HOST`, `TEST_FILE_PATH`, and `MIGRATIONS_PATH` are set and then run:
+```bash
+qlot exec ./bin/run-map-reduce-migrations.ros
+qlot exec ./bin/run-map-reduce.ros
+```.
 
 ## Status
 
