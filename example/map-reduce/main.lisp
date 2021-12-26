@@ -7,7 +7,7 @@
   (:export run))
 (in-package :monomyth/map-reduce/main)
 
-(defparameter *rmq-host* (uiop:getenv "TEST_PROCESSING_RMQ"))
+(defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
 (defparameter *rmq-port* 5672)
 (defparameter *rmq-user* (uiop:getenv "TEST_RMQ_DEFAULT_USER"))
 (defparameter *rmq-pass* (uiop:getenv "TEST_RMQ_DEFAULT_PASS"))
