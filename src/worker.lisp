@@ -37,7 +37,7 @@ it should be okay start a node"))
                  :documentation "the zmq pull socket used for node related MMOP")
    (name :reader worker/name
          :initform (name-worker)
-         :documentation "a unique worker name set before startup")
+         :documentation "a unique worker name set before start-node")
    (mmop-version :reader worker/mmop-version
                  :initform *mmop-v0*
                  :documentation "the MMOP version the worker is using")
@@ -93,12 +93,12 @@ it should be okay start a node"))
     ((complete-task-v0 node-type) (complete-tasks worker node-type))))
 
 (defun complete-node-task (worker node-type node-name)
-  "when a node signals that it has completed its task it should be shutdown,
+  "when a node signals that it has completed its task it should be stop-node,
 removed from the workers state, and then the master server should be notified."
   (let ((node (gethash node-name (worker/nodes worker))))
     (if node
         (progn
-          (shutdown node)
+          (stop-node node)
           (remhash node-name (worker/nodes worker))
           (send-msg (worker/master-socket worker) *mmop-v0*
                     (worker-task-completed-v0 node-type)))
@@ -128,7 +128,7 @@ there are no more items on the data stream"
                  node-type "recipe build" "worker cannot handle recipe type")))
 
     (:no-error (res)
-      (startup res (worker/context worker) (worker/nodes-socket-address worker))
+      (start-node res (worker/context worker) (worker/nodes-socket-address worker))
       (let ((name (node/node-name res)))
         (setf (gethash name (worker/nodes worker)) res)
         (send-msg (worker/master-socket worker) (worker/mmop-version worker)
@@ -140,7 +140,7 @@ there are no more items on the data stream"
   (iter:iterate
     (iter:for (name node) in-hashtable (worker/nodes worker))
     (v:info '(:worker :node) "shutting down node ~a" name)
-    (shutdown node))
+    (stop-node node))
   (pzmq:close (worker/master-socket worker))
   (pzmq:close (worker/nodes-socket worker))
   (pzmq:ctx-destroy (worker/context worker)))

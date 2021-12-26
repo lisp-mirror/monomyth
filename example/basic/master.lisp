@@ -54,13 +54,13 @@
   (let ((work-node (build-test-node (format nil "worknode-~d" (get-universal-time))
                                     *queue1* :work *rmq-host*
                                     *rmq-port* *rmq-user* *rmq-pass*)))
-    (startup work-node *test-context* nil nil)
+    (start-node work-node *test-context* nil nil)
     (let ((msgs (iter:iterate
                   (iter:repeat *number-of-test-msgs*)
                   (iter:for msg = (generate-test-msg *length-of-test-msgs*))
                   (iter:collect msg)
                   (send-message work-node *queue1* msg))))
-      (shutdown work-node)
+      (stop-node work-node)
       msgs)))
 
 (defun calculate-result-messge (test-msg)
@@ -110,7 +110,7 @@
           (iter:for worker-id in (ghash-keys (master-workers master)))
           (send-msg control *mmop-v0* (mmop-c:stop-worker-request-v0 worker-id)))))
 
-    (startup work-node *test-context* nil nil)
+    (start-node work-node *test-context* nil nil)
     (labels ((get-msg-w-restart ()
                (handler-case (car (pull-items work-node))
                  (rabbitmq-error (c)
@@ -122,4 +122,4 @@
         (iter:for got = (get-msg-w-restart))
         (ok (member (rmq-message-body got) expected-result :test #'string=))
         (ack-message work-node got))
-      (shutdown work-node))))
+      (stop-node work-node))))

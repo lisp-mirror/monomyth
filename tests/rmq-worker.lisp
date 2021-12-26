@@ -225,12 +225,12 @@
                          "checker" *source-queue* :checker
                          *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
 
-        (startup work-node *test-context* "inproc://test" nil)
-        (startup check-node *test-context* "inproc://test")
+        (start-node work-node *test-context* "inproc://test" nil)
+        (start-node check-node *test-context* "inproc://test")
         (iter:iterate
           (iter:for item in items)
           (send-message work-node *source-queue* item))
-        (shutdown work-node)
+        (stop-node work-node)
 
         (bt:make-thread
          #'(lambda ()
@@ -262,11 +262,11 @@
               (build-work-node
                (format nil "worknode-~d" (get-universal-time))
                *source-queue* :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
-        (startup work-node *test-context* "inproc://test" nil)
+        (start-node work-node *test-context* "inproc://test" nil)
         (ng (pull-items work-node))
 
-        (shutdown work-node)
-        (shutdown check-node))))
+        (stop-node work-node)
+        (stop-node check-node))))
 
   (testing "multiple nodes"
     (let ((recipe1 (build-test-node1-recipe))
@@ -291,11 +291,11 @@
       (let ((check-node (build-checking-node
                          "checker" *source-queue* :checker
                          *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
-        (startup work-node *test-context* "inproc://test" nil)
+        (start-node work-node *test-context* "inproc://test" nil)
         (iter:iterate
           (iter:for item in items)
           (send-message work-node queue-1 item))
-        (shutdown work-node)
+        (stop-node work-node)
 
         (bt:make-thread
          #'(lambda ()
@@ -338,7 +338,7 @@
 
         (let ((wrkr (build-rmq-worker :host *rmq-host* :username *rmq-user*
                                       :password *rmq-pass*)))
-          (startup check-node *test-context* "inproc://test")
+          (start-node check-node *test-context* "inproc://test")
           (start-worker wrkr "tcp://localhost:55555")
           (run-worker wrkr)
           (sleep .5)
@@ -349,8 +349,8 @@
               (build-final-work-node
                (format nil "worknode-~d" (get-universal-time))
                queue-4 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
-        (startup work-node *test-context* "inproc://test" nil)
+        (start-node work-node *test-context* "inproc://test" nil)
         (ng (pull-items work-node))
 
-        (shutdown check-node)
-        (shutdown work-node)))))
+        (stop-node check-node)
+        (stop-node work-node)))))

@@ -43,9 +43,9 @@
 (deftest fn-rmq-node
   (let ((tnode (build-fn-node-test (format nil "testnode-~a" (get-universal-time))
                                    nil :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
-    (startup tnode *test-context* nil nil)
+    (start-node tnode *test-context* nil nil)
     (ok rmq-test-var)
-    (shutdown tnode)
+    (stop-node tnode)
     (ng rmq-test-var)))
 
 (defvar system-test-var)
@@ -57,9 +57,9 @@
 (deftest fn-system
   (let ((tnode (build-fn-system-test (format nil "testnode-~a" (get-universal-time))
                                      nil :test *rmq-host* *rmq-port* *rmq-user* *rmq-pass*)))
-    (startup tnode *test-context* nil nil)
+    (start-node tnode *test-context* nil nil)
     (ok system-test-var)
-    (shutdown tnode)
+    (stop-node tnode)
     (ng system-test-var)))
 
 (define-system tst4 ()
