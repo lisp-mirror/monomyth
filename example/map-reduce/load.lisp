@@ -24,8 +24,7 @@
                    (iter:reducing line by #'(lambda (acc val) (str:concat acc " " val))))))
         (if res res
             (progn
-              (complete-task node)
-              (wait-for-finish node))))))
+              (complete-task node))))))
 
 (defun stop-file-fn ()
   (close *file-handle*))

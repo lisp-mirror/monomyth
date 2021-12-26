@@ -25,8 +25,7 @@
            node-error/step
            node-error/items
            task-complete
-           task-complete/node-name
-           wait-for-finish))
+           task-complete/node-name))
 (in-package :monomyth/node)
 
 (defparameter *stub-message* "STUB-ITEM")
@@ -206,8 +205,7 @@ Produces a list of length node/batch-size filled with :stub-item keywords."
              (iter:iterate
                (iter:while (node/running node))
                (when (and (not (run-iteration node)) (node/complete-when-ready node))
-                 (complete-task node)
-                 (wait-for-finish node)))
+                 (complete-task node)))
              (v:info `(:node ,(node/type node))
                      "work thread ~a complete" (node/node-name node))
              (atomic (setf (node/complete node) t)))
@@ -233,4 +231,5 @@ Produces a list of length node/batch-size filled with :stub-item keywords."
 (defmethod complete-task ((node node))
   (send-msg (node/socket node) *mmop-v0*
             (node-task-completed-v0
-             (string (node/type node)) (node/node-name node))))
+             (string (node/type node)) (node/node-name node)))
+  (wait-for-finish node))
