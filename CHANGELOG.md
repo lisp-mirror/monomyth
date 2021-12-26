@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - The worker thread and master routing threads now block properly instead of
   constantly polling and re-polling the socket.
+- The content-type header in the control api has been fixed.
 
 ## [0.4.1] - 2021-12-25
 ### Fixed
