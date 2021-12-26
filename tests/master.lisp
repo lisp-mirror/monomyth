@@ -347,11 +347,11 @@
                 (fulfill p t)))
         1 :source-queue *dest-queue*)
 
-      (startup work-node *test-context* "inproc://test" nil)
+      (start-node work-node *test-context* "inproc://test" nil)
       (iter:iterate
         (iter:for item in items)
         (send-message work-node *source-queue* item))
-      (shutdown work-node)
+      (stop-node work-node)
 
       (let ((check-node (build-checking-node
                          "check node" queue-4 :check
@@ -365,7 +365,7 @@
 
         (sleep .1)
         (add-recipe master recipe1)
-        (startup check-node *test-context* "inproc://test")
+        (start-node check-node *test-context* "inproc://test")
 
         (pzmq:with-context nil
           (pzmq:with-socket client :dealer
@@ -380,15 +380,15 @@
             (test-shutdown-success client)))
 
         (stop-master master)
-        (shutdown check-node))
+        (stop-node check-node))
 
       (setf work-node
             (build-work-node
              (format nil "worknode-~d" (get-universal-time))
              *dest-queue* :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
-      (startup work-node *test-context* "inproc://test" nil)
+      (start-node work-node *test-context* "inproc://test" nil)
       (ng (pull-items work-node))
-      (shutdown work-node)))
+      (stop-node work-node)))
 
   (testing "one worker - two nodes"
     (let* ((work-node
@@ -417,11 +417,11 @@
                 (fulfill p t)))
         1 :source-queue queue-3)
 
-      (startup work-node *test-context* "inproc://test" nil)
+      (start-node work-node *test-context* "inproc://test" nil)
       (iter:iterate
         (iter:for item in items)
         (send-message work-node queue-1 item))
-      (shutdown work-node)
+      (stop-node work-node)
 
       (let ((check-node (build-checking-node
                          "check node" queue-4 :check
@@ -434,7 +434,7 @@
                             (pass "worker-stopped")))
 
         (sleep .1)
-        (startup check-node *test-context* "inproc://test")
+        (start-node check-node *test-context* "inproc://test")
 
         (pzmq:with-context nil
           (pzmq:with-socket client :dealer
@@ -451,16 +451,16 @@
             (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker)))
             (test-shutdown-success client)))
 
-        (shutdown check-node)
+        (stop-node check-node)
         (stop-master master))
 
       (setf work-node
             (build-final-work-node1
              (format nil "worknode-~d" (get-universal-time))
              queue-3 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
-      (startup work-node *test-context* "inproc://test" nil)
+      (start-node work-node *test-context* "inproc://test" nil)
       (ng (pull-items work-node))
-      (shutdown work-node)))
+      (stop-node work-node)))
 
   (testing "two workers"
     (let* ((work-node
@@ -494,11 +494,11 @@
                 (fulfill p t)))
         1 :source-queue queue-4)
 
-      (startup work-node *test-context* "inproc://test" nil)
+      (start-node work-node *test-context* "inproc://test" nil)
       (iter:iterate
         (iter:for item in items)
         (send-message work-node queue-1 item))
-      (shutdown work-node)
+      (stop-node work-node)
 
       (let ((check-node (build-checking-node
                          "check node" queue-4 :check
@@ -517,7 +517,7 @@
                             (pass "worker2-stopped")))
 
         (sleep .1)
-        (startup check-node *test-context* "inproc://test")
+        (start-node check-node *test-context* "inproc://test")
 
         (pzmq:with-context nil
           (pzmq:with-socket client :dealer
@@ -542,13 +542,13 @@
             (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker2)))
             (test-shutdown-success client)))
 
-        (shutdown check-node)
+        (stop-node check-node)
         (stop-master master))
 
       (setf work-node
             (build-final-work-node
              (format nil "worknode-~d" (get-universal-time))
              queue-4 :work *rmq-host* *rmq-port* *rmq-user* *rmq-pass*))
-      (startup work-node *test-context* "inproc://test" nil)
+      (start-node work-node *test-context* "inproc://test" nil)
       (ng (pull-items work-node))
-      (shutdown work-node))))
+      (stop-node work-node))))

@@ -58,7 +58,7 @@
      ,(if start-fn
           ;; NOTE: This method is run ~:before~ because this ensures that the
           ;; worker thread has not been started when the user code executes.
-          `(defmethod startup :before
+          `(defmethod start-node :before
                ((node ,name) context worker-address &optional build-worker-thread)
              (declare (ignorable node context worker-address build-worker-thread))
              (funcall ,start-fn)))
@@ -66,7 +66,7 @@
      ,(if stop-fn
           ;; NOTE: This method is run ~:after~ because this ensures that the
           ;; worker thread has been terminated when the user code executes.
-           `(defmethod shutdown :after ((node ,name))
+           `(defmethod stop-node :after ((node ,name))
               (declare (ignorable node))
               (funcall ,stop-fn)))))
 
@@ -74,7 +74,7 @@
     (name transform-func size &key source-queue dest-queue start-fn stop-fn)
   "Defines all classes, methods, and functions for a new node type.
 The ~:start-fn~ and ~:stop-fn~ should functions that take no arguments and are used
-to extend the node's startup and shutdown methods."
+to extend the node's start-node and stop-node methods."
   (with-gensyms (keyword-sym)
     (define-rmq-node-internal name transform-func nil source-queue dest-queue
       size keyword-sym start-fn stop-fn)))
@@ -102,7 +102,7 @@ quite simple."
 A function called add-<system-name>-recipes is built to make it easy to add the recipes
 at start up.
 The ~:start-fn~ and ~:stop-fn~ should functions that take no arguments and are used
-to extend the node's startup and shutdown methods.
+to extend the node's start-node and stop-node methods.
 In the system wide keys, pull-first and place-last indicate if the first node
 should pull from a source queue and if the last node should place on a destination queue."
   (let ((queues (build-queues pull-first place-last nodes)))

@@ -98,7 +98,7 @@
                           (pass "worker2-stopped")))
 
       (sleep .1)
-      (startup check-node *test-context* "inproc://test")
+      (start-node check-node *test-context* "inproc://test")
 
       (pzmq:with-context nil
         (pzmq:with-socket client :dealer
@@ -134,5 +134,5 @@
           (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker2)))
           (test-shutdown-success client)))
 
-      (shutdown check-node)
+      (stop-node check-node)
       (stop-master master))))

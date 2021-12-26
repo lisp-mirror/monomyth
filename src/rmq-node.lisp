@@ -72,12 +72,12 @@ defaults are the local rabbit-mq defaults"
      (login-sasl-plain conn vhost username password)
      conn)))
 
-(defmethod startup ((node rmq-node) context worker-address &optional build-worker-thread)
+(defmethod start-node ((node rmq-node) context worker-address &optional build-worker-thread)
   "opens a channel using the nodes connections after setting up the socket.
 also ensures all three queues are up and sets up basic consume for the source queue"
   (declare (ignore build-worker-thread))
   (rabbit-mq-call
-   :startup
+   :start-node
    (progn
      (channel-open (rmq-node/conn node) *channel*)
      (when (rmq-node/source-queue node)
@@ -92,11 +92,11 @@ also ensures all three queues are up and sets up basic consume for the source qu
        (basic-consume (rmq-node/conn node) *channel*
                       (rmq-node/source-queue node))))))
 
-(defmethod shutdown ((node rmq-node))
+(defmethod stop-node ((node rmq-node))
   "closes the channel and then destroys the connections.
-note that this means that once an rmq-node is shutdown, it cannot be started up again"
+note that this means that once an rmq-node is stop-node, it cannot be started up again"
   (rabbit-mq-call
-   :shutdown
+   :stop-node
    (destroy-connection (rmq-node/conn node))))
 
 (defun send-message (node queue message)
