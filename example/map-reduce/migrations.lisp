@@ -1,6 +1,9 @@
 (defpackage monomyth/map-reduce/migrations
   (:use :cl :cl-migratum.provider.local-path :cl-migratum
-        :cl-migratum.driver.sql :monomyth/map-reduce/db))
+        :cl-migratum.driver.sql :monomyth/map-reduce/db)
+  (:export init-migrations
+           migrations-up
+           shutdown-migrations))
 (in-package :monomyth/map-reduce/migrations)
 
 (defparameter *migrations-path* (uiop:getenv "MIGRATIONS_PATH"))
@@ -32,6 +35,6 @@
 (defun add-migration (name)
   (provider-create-migration *migration-provider* :description name))
 
-(defun shutdown-migraions ()
+(defun shutdown-migrations ()
   (driver-shutdown *migration-driver*)
   (provider-shutdown *migration-provider*))
