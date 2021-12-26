@@ -60,5 +60,3 @@ The features likely to be targeted for a 1.0 release:
 - Basic monitoring of workers and nodes, possibly data flow.
 - More fine grained control of node threads.
 - Possible (but very unlikely) Kafka support.
-
-THIS IS A TEST
