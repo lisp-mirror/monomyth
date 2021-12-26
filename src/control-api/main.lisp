@@ -17,7 +17,9 @@ right handler"
 
 (defun respond (body &key (type "application/json") (status 200) headers)
   "a helper function to construct clack responses"
-  `(,status ,(append `(:conten-type ,type) headers) (,body)))
+  `(,status
+    ,(append `(:content-type ,type) headers)
+    (,body)))
 
 (defmacro with-control-socket ((socket uri) &rest forms)
   "a helper macro that build and connects a socket"
