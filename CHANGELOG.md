@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- Nodes no longer wait at all between iterations, but the rmq-node timeout on
+  pulling data from rabbit-mq has been raised to 0.1 seconds.
+  This should result in about the same behavior in terms of shutdown (though
+  slower) but vastly decrease processing time of longer processes.
+  Test time, however, has increased since node now wait longer to exit.
+- Nodes now wait for the iteration to be 'finished' when they complete a task.
+
 ### Fixed
 - The worker thread and master routing threads now block properly instead of
   constantly polling and re-polling the socket.

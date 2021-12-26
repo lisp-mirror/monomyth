@@ -14,7 +14,7 @@
            nack-message))
 (in-package :monomyth/rmq-node)
 
-(defparameter *get-timeout* 100)
+(defparameter *get-timeout-microseconds* 1000000)
 (defparameter *channel* 1)
 
 (transactional
@@ -110,7 +110,7 @@ note that this means that once an rmq-node is shutdown, it cannot be started up 
   "gets a message off the source queue and changes the message to be a string
 (as opposed to a byte array)
 return :success t with the :result if things go well"
-  (let ((msg (consume-message (rmq-node/conn node) :timeout *get-timeout*)))
+  (let ((msg (consume-message (rmq-node/conn node) :timeout *get-timeout-microseconds*)))
     (build-rmq-message
      :body (babel:octets-to-string (message/body (envelope/message msg)) :encoding :utf-8)
      :delivery-tag (envelope/delivery-tag msg))))
