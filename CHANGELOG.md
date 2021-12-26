@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   slower) but vastly decrease processing time of longer processes.
   Test time, however, has increased since node now wait longer to exit.
 - Nodes now wait for the iteration to be 'finished' when they complete a task.
+- The node methods `startup` and `shutdown` have been renamed to `start-node`
+  `stop-node` for greater clarity and consistency.
+  This is an internal change and should have no effect on the user API.
 
 ### Fixed
 - The worker thread and master routing threads now block properly instead of
