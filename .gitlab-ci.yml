@@ -24,3 +24,25 @@ test:
     - merge_request
     - develop
     - master
+
+test-map-reduce:
+  stage: test
+  cache:
+    key: qlot-cache
+    paths:
+      - .qlot/
+  services:
+    - rabbitmq:latest
+  variables:
+    TEST_RMQ: "rabbitmq"
+    TEST_RMQ_DEFAULT_USER: "guest"
+    TEST_RMQ_DEFAULT_PASS: "guest"
+  before_script:
+    - qlot install
+    - ln -s /builds/smaller_infinity/monomyth /root/.roswell/local-projects/monomyth
+  script:
+    - qlot exec ./bin/run-map-reduce.ros
+  only:
+    - merge_request
+    - develop
+    - master
