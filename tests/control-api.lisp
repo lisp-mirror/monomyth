@@ -2,7 +2,7 @@
   (:use :cl :rove :monomyth/control-api/main :bordeaux-threads :monomyth/mmop
    :monomyth/master :jonathan :cl-rabbit :monomyth/tests/utils :rutils.misc
         :monomyth/rmq-node :monomyth/rmq-worker :monomyth/worker
-        :monomyth/dsl :babel))
+        :monomyth/dsl))
 (in-package :monomyth/tests/control-api)
 
 (v:output-here *terminal-io*)
@@ -61,7 +61,7 @@
 
     (setf (quri:uri-path uri) "/ping")
     (let* ((resp (multiple-value-list (dex:get uri)))
-           (body (octets-to-string (car resp))))
+           (body (car resp)))
       (ok (= (nth 1 resp) 200))
       (ok (string= body "pong")))
 
@@ -83,7 +83,7 @@
       (handler-case (dex:post uri)
         (dex:http-request-failed (e)
           (ok (= (dex:response-status e) 503))
-          (let ((body (parse (octets-to-string (dex:response-body e)))))
+          (let ((body (parse (dex:response-body e))))
             (ng (getf body :|request_sent_to_worker|))
             (ok (string= (getf body :|error_message|)
                          "no active worker servers"))))))
@@ -98,7 +98,7 @@
 
     (testing "good recipe"
       (let* ((resp (multiple-value-list (dex:post uri)))
-             (body (parse (octets-to-string (car resp)))))
+             (body (parse (car resp))))
         (ok (= (nth 1 resp) 201))
         (ok (getf body :|request_sent_to_worker|))))
 
@@ -107,7 +107,7 @@
       (handler-case (dex:post uri)
         (dex:http-request-failed (e)
           (ok (= (dex:response-status e) 400))
-          (let ((body (parse (octets-to-string (dex:response-body e)))))
+          (let ((body (parse (dex:response-body e))))
             (ng (getf body :|request_sent_to_worker|))
             (ok (string= (getf body :|error_message|)
                          "could not find recipe type BAD-TEST"))))))
@@ -130,7 +130,7 @@
       (handler-case (dex:post uri)
         (dex:http-request-failed (e)
           (ok (= (dex:response-status e) 400))
-          (let ((body (parse (octets-to-string (dex:response-body e)))))
+          (let ((body (parse (dex:response-body e))))
             (ng (getf body :|request_sent_to_worker|))
             (ok (string= (getf body :|error_message|)
                          "could not shutdown unrecognized worker test"))))))
@@ -146,7 +146,7 @@
     (testing "good worker"
       (setf (quri:uri-path uri) (format nil "/stop-worker/~a" (worker/name worker)))
       (let* ((resp (multiple-value-list (dex:post uri)))
-             (body (parse (octets-to-string (car resp)))))
+             (body (parse (car resp))))
         (ok (= (nth 1 resp) 201))
         (ok (getf body :|request_sent_to_worker|))))
 
@@ -155,7 +155,7 @@
       (handler-case (dex:post uri)
         (dex:http-request-failed (e)
           (ok (= (dex:response-status e) 400))
-          (let ((body (parse (octets-to-string (dex:response-body e)))))
+          (let ((body (parse (dex:response-body e))))
             (ng (getf body :|request_sent_to_worker|))
             (ok (string= (getf body :|error_message|)
                          "could not shutdown unrecognized worker test"))))))
@@ -192,14 +192,14 @@
     (setf (quri:uri-path uri) "/recipe-info")
 
     (testing "no running nodes/no recipes"
-      (ok (string= (octets-to-string (dex:get uri)) (to-json '()))))
+      (ok (string= (dex:get uri) (to-json '()))))
 
     (testing "no running nodes/recipes"
       (add-api-recipes master)
 
 
       (let* ((resp (multiple-value-list (dex:get uri)))
-             (payload (parse (octets-to-string (car resp)))))
+             (payload (parse (car resp))))
         (ok (= (nth 1 resp) 200))
         (ok (= 3 (length payload)))
         (iter:iterate
@@ -227,20 +227,18 @@
 
       (let ((resp (multiple-value-list (dex:get uri))))
         (ok (= (nth 1 resp) 200))
-        (confirm-recipe-counts (parse (octets-to-string (car resp))))))
+        (confirm-recipe-counts (parse (car resp)))))
 
     (sleep .1)
 
     (testing "node completed"
       (send-msg (worker/master-socket worker) *mmop-v0*
-                (mmop-w:worker-task-completed-v0 "TEST-NODE2"))
-      (send-msg (worker/master-socket worker) *mmop-v0*
                 (mmop-w:worker-task-completed-v0 "TEST-NODE1"))
 
-      (sleep 1)
+      (sleep 3)
 
       (let* ((resp (multiple-value-list (dex:get uri)))
-             (body (parse (octets-to-string (car resp)))))
+             (body (parse (car resp))))
         (ok (= (nth 1 resp) 200))
         (iter:iterate
           (iter:for item in body)
@@ -283,7 +281,7 @@
     (testing "no workers running"
       (let ((resp (multiple-value-list (dex:get uri))))
         (ok (= (nth 1 resp) 200))
-        (ok (string= (octets-to-string (car resp)) (to-json '())))))
+        (ok (string= (car resp) (to-json '())))))
 
     (bt:make-thread #'(lambda ()
                         (start-worker worker1 (format nil "tcp://localhost:~a" *master-port*))
@@ -305,7 +303,7 @@
 
     (testing "workers running, no recipes"
       (let* ((resp (multiple-value-list (dex:get uri)))
-             (body (parse (octets-to-string (car resp)))))
+             (body (parse (car resp))))
         (ok (= (nth 1 resp) 200))
         (iter:iterate
           (iter:for worker-info in body)
@@ -336,7 +334,7 @@
       (sleep .1)
 
       (let* ((resp (multiple-value-list (dex:get uri)))
-             (body (parse (octets-to-string (car resp))))
+             (body (parse (car resp)))
              (counts (reduce
                       #'(lambda (acc val)
                           (fset:map-union
