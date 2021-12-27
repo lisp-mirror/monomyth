@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The worker thread and master routing threads now block properly instead of
   constantly polling and re-polling the socket.
 - The content-type header in the control api has been fixed.
+- The way in which the master server chooses which worker to send a node has
+  been fixed.
+  The master should now first find the workers with the lowest counts of the
+  requested node type, and the of those workers find the worker with the lowest
+  overall count.
 
 ## [0.4.1] - 2021-12-25
 ### Fixed

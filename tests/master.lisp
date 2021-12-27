@@ -164,9 +164,17 @@
                      (pass "request succeeded message"))
                     (_ (fail "unexpected message type")))))
 
-              (test-master-state-after-asks master client1-name c1-reqs)
-              (test-master-state-after-asks master client2-name c2-reqs)
-              (test-master-state-after-asks master client3-name c3-reqs))))
+              (testing "node balance"
+                (ok (member '("TEST-NODE1" "TEST-NODE1") `(,c1-reqs ,c2-reqs ,c3-reqs)
+                            :test #'equal))
+                (ok (member '("TEST-NODE1") `(,c1-reqs ,c2-reqs ,c3-reqs) :test #'equal))
+                (ok (member '("TEST-NODE2" "TEST-NODE1") `(,c1-reqs ,c2-reqs ,c3-reqs)
+                            :test #'equal)))
+
+              (testing "master state"
+                (test-master-state-after-asks master client1-name c1-reqs)
+                (test-master-state-after-asks master client2-name c2-reqs)
+                (test-master-state-after-asks master client3-name c3-reqs)))))
 
         (testing "response messages"
           (let ((c1-expected-results (make-hash-table :test #'equal))
