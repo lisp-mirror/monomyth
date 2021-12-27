@@ -324,22 +324,50 @@ to a plist with :running and :queued"
           (get-ghash (worker-info-outstanding-request-counts worker) type-id 0))))
 
 (transaction
-    (defun find-worker-lowest-node-type-count (master type-id)
-      "finds the worker id with the smallest number of those nodes running"
-      (first
+    (defun all-total-possible-nodes (master worker-id)
+      "gets the count of all possible nodes for the worker id"
+      (let ((worker (get-ghash (master-workers master) worker-id)))
+        (+ (reduce #'+ (ghash-values (worker-info-type-counts worker)))
+            (reduce #'+ (ghash-values
+                         (worker-info-outstanding-request-counts worker)))))))
+
+(transaction
+    (defun get-lowest-worker (master worker-ids)
+      "takes a list of ids and gets the worker with the lowest total node count"
+      (car
        (reduce
-        #'(lambda (pair1 pair2)
-            (if (< (cdr pair1) (cdr pair2))
-                pair1 pair2))
+        #'(lambda (acc val)
+            (if (< (cdr val) (cdr acc)) val acc))
+        (mapcar
+         #'(lambda (val) (cons val (all-total-possible-nodes master val)))
+         worker-ids)))))
+
+(transaction
+    (defun find-workers-lowest-node-type-count (master type-id)
+      "finds the worker ids with the smallest number of those nodes running"
+      (cdr
+       (reduce
+        #'(lambda (acc val)
+            (trivia:let-match
+                (((cons acc-count ids) acc)
+                 ((cons id count) val))
+              (cond
+                ((not acc-count) (cons count `(,id)))
+                ((= acc-count count) (cons acc-count (cons id ids)))
+                ((< count acc-count) (cons count `(,id)))
+                ((> count acc-count) acc))))
         (mapcar
          #'(lambda (worker-pair)
              `(,(car worker-pair) . ,(total-posible-nodes (cdr worker-pair) type-id)))
-         (ghash-pairs (master-workers master)))))))
+         (ghash-pairs (master-workers master)))
+        :initial-value (cons nil nil)))))
 
 (transaction
     (defun determine-worker-for-node (master type-id)
       "determines the best worker id for the recipe type"
-      (find-worker-lowest-node-type-count master type-id)))
+      (get-lowest-worker
+       master
+       (find-workers-lowest-node-type-count master type-id))))
 
 (transaction
     (defun add-recipe (master recipe)
@@ -348,21 +376,28 @@ to a plist with :running and :queued"
                        (symbol-name (node-recipe/type recipe)))
             recipe)))
 
-(defun start-node (master socket client-id type-id recipe)
-  "Sends the start node request to a client with the supplied recipe"
-  (handler-case
-      (let ((worker-id (atomic (determine-worker-for-node master type-id))))
-        (send-msg socket *mmop-v0* (start-node-v0 worker-id recipe))
-        (atomic
-         (let ((val (get-ghash
-                     (worker-info-outstanding-request-counts
-                      (get-ghash (master-workers master) worker-id))
-                     type-id 0)))
-           (setf (get-ghash
+(transaction
+    (defun inc-pending-node (master worker-id type-id)
+      "increments the pending count for the node and worker then returns the worker id"
+      (let ((val (get-ghash
                   (worker-info-outstanding-request-counts
                    (get-ghash (master-workers master) worker-id))
-                  type-id)
-                 (1+ val))))
+                  type-id 0)))
+        (setf (get-ghash
+               (worker-info-outstanding-request-counts
+                (get-ghash (master-workers master) worker-id))
+               type-id)
+              (1+ val)))
+      worker-id))
+
+(defun start-node (master socket client-id type-id recipe)
+  "Sends the start node request to a worker with the supplied recipe"
+  (handler-case
+      (let ((worker-id (atomic (inc-pending-node
+                                master
+                                (determine-worker-for-node master type-id)
+                                type-id))))
+        (send-msg socket *mmop-v0* (start-node-v0 worker-id recipe))
         (send-msg socket *mmop-v0* (start-node-request-success-v0 client-id)))
 
     (mmop-error (c)
