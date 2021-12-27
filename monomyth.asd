@@ -1,5 +1,5 @@
 (defsystem "monomyth"
-  :version "0.3.1"
+  :version "0.4.2"
   :author "Paul Ricks"
   :license "MPL 2.0"
   :components ((:module "src"
