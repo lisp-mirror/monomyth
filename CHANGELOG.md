@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2021-12-27
+### Added
+- Added script to run migrations for map reduce example.
+
+### Changed
+- Nodes no longer wait at all between iterations, but the rmq-node timeout on
+  pulling data from rabbit-mq has been raised to 0.1 seconds.
+  This should result in about the same behavior in terms of shutdown (though
+  slower) but vastly decrease processing time of longer processes.
+  Test time, however, has increased since node now wait longer to exit.
+- Nodes now wait for the iteration to be 'finished' when they complete a task.
+- The node methods `startup` and `shutdown` have been renamed to `start-node`
+  `stop-node` for greater clarity and consistency.
+  This is an internal change and should have no effect on the user API.
+
+### Fixed
+- The worker thread and master routing threads now block properly instead of
+  constantly polling and re-polling the socket.
+- The content-type header in the control api has been fixed.
+- The way in which the master server chooses which worker to send a node has
+  been fixed.
+  The master should now first find the workers with the lowest counts of the
+  requested node type, and the of those workers find the worker with the lowest
+  overall count.
+
 ## [0.4.1] - 2021-12-25
 ### Fixed
 - Removed broken dependency (lucerne) with clack and ningle in control api.

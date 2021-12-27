@@ -98,7 +98,7 @@
                           (pass "worker2-stopped")))
 
       (sleep .1)
-      (startup check-node *test-context* "inproc://test")
+      (start-node check-node *test-context* "inproc://test")
 
       (pzmq:with-context nil
         (pzmq:with-socket client :dealer
@@ -122,14 +122,17 @@
           (force *fn2-done*)
           (force *fn3-done*)
 
-          (ok (zerop (hash-table-count (worker/nodes worker1))))
-          (ok (zerop (hash-table-count (worker/nodes worker2))))
-
+          (iter:iterate
+            (sleep .5)
+            (iter:until
+                (and (zerop (hash-table-count (worker/nodes worker1)))
+                     (zerop (hash-table-count (worker/nodes worker2))))))
+          (ok "all nodes complete")
 
           (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker1)))
           (test-shutdown-success client)
           (send-msg client *mmop-v0* (mmop-c:stop-worker-request-v0 (worker/name worker2)))
           (test-shutdown-success client)))
 
-      (shutdown check-node)
+      (stop-node check-node)
       (stop-master master))))

@@ -2,7 +2,7 @@
   (:use :cl :uuid :stmx :monomyth/mmop :monomyth/mmop-node)
   (:shadow :closer-mop)
   (:export *stub-message*
-           startup
+           start-node
            build-stub-item
            build-stub-items
            pull-items
@@ -12,7 +12,7 @@
            remove-empty-messages
            handle-failure
            run-iteration
-           shutdown
+           stop-node
            complete-task
            node
            node/node-name
@@ -30,7 +30,7 @@
 
 (defparameter *stub-message* "STUB-ITEM")
 
-(defgeneric startup
+(defgeneric start-node
     (node context worker-address &optional build-worker-thread)
   (:documentation
    "performs any initial start up to ensure the node is working as corrected.
@@ -65,9 +65,9 @@ expects an explanation under :error in the result
 the step can be :pull, :transform, or :place
 the result is the full payload sent by the last step"))
 
-(defgeneric shutdown (node)
+(defgeneric stop-node (node)
   (:documentation
-   "Graceful shutdown of the node.
+   "Graceful stop-node of the node.
 Cannot be called within the node as it kills the thread, assumes that
 the thread name is the node name."))
 
@@ -108,7 +108,7 @@ the thread name is the node name."))
         :documentation "whether or not to run the pull-items method")
        (running :accessor node/running
                 :initform t
-                :documentation "transactional condition that allows for safe shutdown")
+                :documentation "transactional condition that allows for safe stop-node")
        (complete-when-ready
         :accessor node/complete-when-ready
         :initform nil
@@ -189,7 +189,7 @@ Produces a list of length node/batch-size filled with :stub-item keywords."
         ;; to fail *on*.
         t))))
 
-(defmethod startup :after
+(defmethod start-node :after
     ((node node) context worker-address &optional (build-worker-thread t))
   (setf (node/socket node) (pzmq:socket context :push))
   (pzmq:setsockopt (node/socket node) :identity (node/node-name node))
@@ -205,15 +205,20 @@ Produces a list of length node/batch-size filled with :stub-item keywords."
              (iter:iterate
                (iter:while (node/running node))
                (when (and (not (run-iteration node)) (node/complete-when-ready node))
-                 (complete-task node))
-               (sleep .1))
+                 (complete-task node)))
              (v:info `(:node ,(node/type node))
                      "work thread ~a complete" (node/node-name node))
              (atomic (setf (node/complete node) t)))
          :name (format nil (node/node-name node))))
       (atomic (setf (node/complete node) t))))
 
-(defmethod shutdown :before ((node node))
+(defun wait-for-finish (node)
+  "waits till a node should no longer be 'running'"
+  (iter:iterate
+    (sleep 1)
+    (iter:until (not (node/running node)))))
+
+(defmethod stop-node :before ((node node))
   (v:info `(:node ,(node/type node))
           "shutting down ~a" (node/node-name node))
   (atomic (setf (node/running node) nil))
@@ -226,4 +231,5 @@ Produces a list of length node/batch-size filled with :stub-item keywords."
 (defmethod complete-task ((node node))
   (send-msg (node/socket node) *mmop-v0*
             (node-task-completed-v0
-             (string (node/type node)) (node/node-name node))))
+             (string (node/type node)) (node/node-name node)))
+  (wait-for-finish node))

@@ -3,11 +3,11 @@
         :monomyth/map-reduce/store :monomyth/dsl :monomyth/worker
         :monomyth/rmq-worker :cl-rabbit :monomyth/rmq-node :monomyth/mmop
         :monomyth/node-recipe :monomyth/master :monomyth/control-api/main
-        :rutils.bind :jonathan :babel)
+        :rutils.bind :jonathan)
   (:export run))
 (in-package :monomyth/map-reduce/main)
 
-(defparameter *rmq-host* (uiop:getenv "TEST_PROCESSING_RMQ"))
+(defparameter *rmq-host* (uiop:getenv "TEST_RMQ"))
 (defparameter *rmq-port* 5672)
 (defparameter *rmq-user* (uiop:getenv "TEST_RMQ_DEFAULT_USER"))
 (defparameter *rmq-pass* (uiop:getenv "TEST_RMQ_DEFAULT_PASS"))
@@ -86,40 +86,39 @@
     (iter:iterate
       (iter:repeat *store-node-counts*)
       (v:info :main "start node (store counts) returned [~a]"
-              (octets-to-string (dex:post uri))))
+              (dex:post uri)))
 
     (setf (quri:uri-path uri) "/start-node/MAP-TEXT")
     (iter:iterate
       (iter:repeat *map-node-counts*)
       (v:info :main "start node (map text) returned [~a]"
-              (octets-to-string (dex:post uri))))
+              (dex:post uri)))
 
     (setf (quri:uri-path uri) "/start-node/LOAD-FILE")
     (iter:iterate
       (iter:repeat *load-node-counts*)
       (v:info :main "start node (load file) returned [~a]"
-              (octets-to-string (dex:post uri))))))
+              (dex:post uri)))))
 
 (defun stop-workers ()
   (let ((uri (quri:copy-uri *control-uri*)))
     (setf (quri:uri-path uri) "/worker-info")
 
     (with ((body status (dex:get uri))
-           (payload (parse (octets-to-string body))))
+           (payload (parse body)))
       (v:info :main "worker info request returned [status ~a]" status)
       (iter:iterate
         (iter:for item in payload)
         (iter:for path = (format nil "/stop-worker/~a" (getf item :|worker_id|)))
         (setf (quri:uri-path uri) path)
         (v:info :main "worker stop request (~a) returned [result ~a]"
-                path (octets-to-string (dex:post uri)))))))
+                path (dex:post uri))))))
 
 (defun check-tasks-complete (uri)
   (with ((body status (dex:get uri))
-         (body-str (octets-to-string body))
-         (payload (parse body-str)))
+         (payload (parse body)))
     (v:info :main.check "check call returned [status ~a] [body ~a]"
-            status body-str)
+            status body)
 
     (iter:iterate
       (iter:for item in payload)

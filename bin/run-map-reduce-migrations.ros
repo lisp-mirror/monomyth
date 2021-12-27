@@ -1,0 +1,20 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+(progn ;;init forms
+  (ros:ensure-asdf)
+  #+quicklisp(ql:quickload '(:monomyth/map-reduce-example))
+  )
+
+(defpackage :ros.script.run-map-reduce-migrations.3849546318
+  (:use :cl))
+(in-package :ros.script.run-map-reduce-migrations.3849546318)
+
+(defun main (&rest argv)
+  (declare (ignorable argv))
+  (monomyth/map-reduce/migrations:init-migrations)
+  (monomyth/map-reduce/migrations:migrations-up)
+  (monomyth/map-reduce/migrations:shutdown-migrations))
+;;; vim: set ft=lisp lisp:

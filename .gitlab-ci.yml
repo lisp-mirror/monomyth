@@ -5,6 +5,10 @@ stages:
 
 test:
   stage: test
+  cache:
+    key: qlot-cache
+    paths:
+      - .qlot/
   services:
     - rabbitmq:latest
   variables:
@@ -16,6 +20,38 @@ test:
     - ln -s /builds/smaller_infinity/monomyth /root/.roswell/local-projects/monomyth
   script:
     - qlot exec ./bin/test.ros
+  only:
+    - merge_request
+    - develop
+    - master
+
+test-map-reduce:
+  stage: test
+  cache:
+    key: qlot-cache
+    paths:
+      - .qlot/
+  services:
+    - rabbitmq:3-management-alpine
+    - postgres:13-alpine
+  variables:
+    TEST_RMQ: "rabbitmq"
+    TEST_RMQ_DEFAULT_USER: "guest"
+    TEST_RMQ_DEFAULT_PASS: "guest"
+
+    POSTGRES_DB: "monomyth"
+    POSTGRES_USER: "user"
+    POSTGRES_PASSWORD: "password"
+
+    POSTGRES_HOST: "postgres"
+    TEST_FILE_PATH: "test-resources/moby-dick.txt"
+    MIGRATIONS_PATH: "example/map-reduce/migrations/"
+  before_script:
+    - qlot install
+    - ln -s /builds/smaller_infinity/monomyth /root/.roswell/local-projects/monomyth
+  script:
+    - qlot exec ./bin/run-map-reduce-migrations.ros
+    - qlot exec ./bin/run-map-reduce.ros
   only:
     - merge_request
     - develop
