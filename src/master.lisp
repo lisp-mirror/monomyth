@@ -334,11 +334,6 @@ to a plist with :running and :queued"
 (transaction
     (defun get-lowest-worker (master worker-ids)
       "takes a list of ids and gets the worker with the lowest total node count"
-      (format t "LOWEST WORKERS ~a~%"
-(mapcar
-         #'(lambda (val) (cons val (all-total-possible-nodes master val)))
-         worker-ids)
-              )
       (car
        (reduce
         #'(lambda (acc val)
